@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Open Home Inventory | Visual AI & Receipt Verified Property Management</title>
+    <link rel="stylesheet" href="/static/css/dashboard.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+</head>
+<body>
+    <div class="app-layout">
+        <!-- Sidebar / Navigation Header -->
+        <header class="top-nav">
+            <div class="brand">
+                <div class="brand-logo">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                </div>
+                <div class="brand-text">
+                    <h1>Open Home Inventory</h1>
+                    <span class="badge-sub">Local-First • Zero-PII • Multi-Modal AI</span>
+                </div>
+            </div>
+            <div class="nav-actions">
+                <a href="/api/export/csv" class="btn btn-secondary" id="btn-export-csv" download>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path><polyline points="7 10 12 15 17 10"></polyline><line x1="12" y1="15" x2="12" y2="3"></line></svg>
+                    Insurance CSV
+                </a>
+                <a href="/api/export/report" class="btn btn-secondary" id="btn-export-report" download>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>
+                    Audit Report
+                </a>
+                <button class="btn btn-primary" id="btn-refresh" onclick="loadDashboard()">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+                    Refresh
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            <!-- Key Metric KPI Cards -->
+            <section class="kpi-grid">
+                <div class="kpi-card glass-panel" id="card-valuation">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Total Replacement Value</span>
+                        <span class="kpi-icon text-emerald">💵</span>
+                    </div>
+                    <div class="kpi-value" id="kpi-total-val">$0.00</div>
+                    <div class="kpi-caption" id="kpi-orig-cost">Purchase Basis: $0.00</div>
+                </div>
+
+                <div class="kpi-card glass-panel" id="card-assets">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Cataloged Assets</span>
+                        <span class="kpi-icon text-blue">📦</span>
+                    </div>
+                    <div class="kpi-value" id="kpi-item-count">0</div>
+                    <div class="kpi-caption" id="kpi-category-count">Across 0 Categories</div>
+                </div>
+
+                <div class="kpi-card glass-panel" id="card-verified">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Receipt Verification</span>
+                        <span class="kpi-icon text-cyan">🧾</span>
+                    </div>
+                    <div class="kpi-value" id="kpi-verified-pct">0%</div>
+                    <div class="kpi-caption" id="kpi-verified-ratio">0 of 0 matched</div>
+                </div>
+
+                <div class="kpi-card glass-panel" id="card-audit">
+                    <div class="kpi-header">
+                        <span class="kpi-title">Audit Readiness</span>
+                        <span class="kpi-icon text-amber">🛡️</span>
+                    </div>
+                    <div class="kpi-value" id="kpi-readiness-score">0 / 100</div>
+                    <div class="kpi-caption" id="kpi-serial-ratio">0 serial numbers logged</div>
+                </div>
+            </section>
+
+            <!-- Search, Filter & Controls Toolbar -->
+            <section class="toolbar glass-panel">
+                <div class="search-box">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+                    <input type="text" id="filter-search" placeholder="Search by name, brand, model, serial, or room..." oninput="handleSearch()">
+                </div>
+                <div class="filter-controls">
+                    <select id="filter-category" onchange="applyFilters()">
+                        <option value="">All Categories</option>
+                    </select>
+
+                    <select id="filter-status" onchange="applyFilters()">
+                        <option value="all">All Verification Statuses</option>
+                        <option value="verified">Verified by Receipt</option>
+                        <option value="unverified">Needs Receipt Match</option>
+                        <option value="has_serial">Has Serial Number</option>
+                    </select>
+
+                    <select id="filter-room" onchange="applyFilters()">
+                        <option value="">All Rooms</option>
+                    </select>
+                </div>
+            </section>
+
+            <!-- Asset Items Table -->
+            <section class="inventory-section glass-panel">
+                <div class="table-header-info">
+                    <h2 class="section-title">Property Asset Ledger</h2>
+                    <span class="ledger-count" id="item-showing-count">Showing 0 items</span>
+                </div>
+
+                <div class="table-container">
+                    <table class="inventory-table" id="inventory-table">
+                        <thead>
+                            <tr>
+                                <th>Item & Specification</th>
+                                <th>Category & Room</th>
+                                <th>Serial Number</th>
+                                <th>Purchase Cost</th>
+                                <th>Replacement Value</th>
+                                <th>Receipt Proof</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="inventory-tbody">
+                            <!-- Populated via JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="empty-state" id="empty-state" style="display: none;">
+                    <div class="empty-icon">📂</div>
+                    <h3>No items found</h3>
+                    <p>No inventory records match your active search or filter criteria.</p>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Item Detail / Optical Inspection Modal -->
+    <div class="modal-overlay" id="item-modal" onclick="closeModalOnBackdrop(event)">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h3 id="modal-title">Item Details</h3>
+                <button class="modal-close" onclick="closeModal()">&times;</button>
+            </div>
+            <div class="modal-body" id="modal-body">
+                <!-- Injected via JS -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/js/dashboard.js"></script>
+</body>
+</html>

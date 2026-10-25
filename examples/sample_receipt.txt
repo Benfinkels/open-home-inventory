@@ -1,0 +1,47 @@
+MICRO CENTER E-RECEIPT & PROOF OF PURCHASE
+Store: #055 Cambridge Micro Center
+Order Number: MC-892410-ORD
+Purchase Date: 2023-11-15
+Register: 04  Cashier: Synthetic-Clerk
+
+ITEMS PURCHASED:
+1. NVIDIA GEFORCE RTX 4090 FOUNDERS EDITION 24GB GDDR6X
+   SKU: 489218
+   Serial Number: SN-RTX4090-FE-2024-8842
+   Price: $1,599.99
+
+SUBTOTAL: $1,599.99
+TAX (6.25%): $99.99
+TOTAL: $1,699.98
+Payment: VISA ending in 1234
+Authorization: 098124
+=== END_OF_RECEIPT ===
+AMAZON.COM ORDER CONFIRMATION
+Order #: 112-9842109-8472911
+Order Date: August 10, 2023
+
+Item(s) Ordered:
+1 of: Dell UltraSharp 27 4K USB-C Hub Monitor (U2723QE) - 3840 x 2160 UHD
+Condition: New
+Sold by: Amazon.com Services LLC
+Price: $579.99
+
+Shipping & Handling: $0.00
+Estimated Tax: $36.25
+Grand Total: $616.24
+=== END_OF_RECEIPT ===
+WHEELWORKS CYCLING PRO SHOP INVOICE
+Invoice Number: WW-2023-4921
+Date: April 20, 2023
+Customer: Synthetic Valued Customer
+
+Item: Specialized Tarmac SL7 Expert Di2 Road Bicycle
+Frame Serial Number: WSBC604291884T
+Size: 56cm
+Color: Satin Carbon / Spectraflair
+Unit Price: $6,500.00
+
+Sales Tax: $406.25
+Total Paid: $6,906.25
+Status: PAID IN FULL
+=== END_OF_RECEIPT ===

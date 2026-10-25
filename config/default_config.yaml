@@ -1,0 +1,38 @@
+vision:
+  backend: "ollama"  # ollama | vllm | openai | custom
+  endpoint: "http://localhost:11434"
+  model: "minicpm-v:latest"
+  temperature: 0.1
+  timeout_seconds: 60
+  optical_crop:
+    enabled: true
+    zoom_factor: 2.0
+    padding_px: 50
+    min_confidence: 0.70
+
+receipts:
+  provider: "mock"  # gog | imap | mock
+  account: "user@example.com"
+  lookback_days: 1095  # 3 years
+  search_queries:
+    - "order confirmation OR receipt OR invoice"
+    - "from:amazon.com (subject:ordered OR subject:'your order')"
+    - "from:bestbuy.com (order OR pickup OR eReceipt)"
+    - "from:microcenter.com (order OR receipt OR pickup)"
+
+reconciliation:
+  fuzzy_threshold: 0.72
+  serial_number_exact_match: true
+  auto_update_valuation: true
+
+storage:
+  db_path: "./data/inventory.db"
+  json_output: "./data/master_inventory.json"
+  csv_output: "./data/master_inventory.csv"
+  summary_output: "./reports/INVENTORY_SUMMARY.md"
+  crops_dir: "./data/optical_crops"
+
+dashboard:
+  host: "127.0.0.1"
+  port: 8080
+  debug: false

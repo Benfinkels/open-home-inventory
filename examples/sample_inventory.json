@@ -1,0 +1,80 @@
+[
+  {
+    "item_name": "GeForce RTX 4090 Founders Edition 24GB",
+    "category": "Electronics & Computers",
+    "brand": "NVIDIA",
+    "model": "RTX 4090 FE 24GB",
+    "serial_number": "SN-RTX4090-FE-2024-8842",
+    "room": "Home Office",
+    "condition": "Excellent",
+    "estimated_replacement_value_usd": 1849.99,
+    "description": "Flagship 24GB GDDR6X GPU installed in primary workstation PC.",
+    "confidence": 0.98,
+    "source_image": "demo_office_01.jpg"
+  },
+  {
+    "item_name": "UltraSharp 27 4K USB-C Hub Monitor (U2723QE)",
+    "category": "Electronics & Computers",
+    "brand": "Dell",
+    "model": "U2723QE",
+    "serial_number": "CN-098271-74261-38A",
+    "room": "Home Office",
+    "condition": "Like New",
+    "estimated_replacement_value_usd": 599.99,
+    "description": "27-inch 4K IPS Black display with integrated USB-C 90W hub.",
+    "confidence": 0.96,
+    "source_image": "demo_office_01.jpg"
+  },
+  {
+    "item_name": "Specialized Tarmac SL7 Expert Di2 Road Bicycle",
+    "category": "Bicycles & Fitness",
+    "brand": "Specialized",
+    "model": "Tarmac SL7 Expert Di2",
+    "serial_number": "WSBC604291884T",
+    "room": "Garage",
+    "condition": "Excellent",
+    "estimated_replacement_value_usd": 7200.00,
+    "description": "56cm FACT 10r carbon frameset with Shimano Ultegra Di2 electronic shifting.",
+    "confidence": 0.95,
+    "source_image": "demo_garage_01.jpg"
+  },
+  {
+    "item_name": "QuietComfort Ultra Wireless Noise Cancelling Headphones",
+    "category": "Audio & Media",
+    "brand": "Bose",
+    "model": "QC Ultra Black",
+    "serial_number": "08472918274619",
+    "room": "Home Office",
+    "condition": "Good",
+    "estimated_replacement_value_usd": 429.00,
+    "description": "Active noise cancelling wireless over-ear spatial audio headphones.",
+    "confidence": 0.94,
+    "source_image": "demo_office_01.jpg"
+  },
+  {
+    "item_name": "Barista Touch Espresso Machine",
+    "category": "Kitchen & Appliances",
+    "brand": "Breville",
+    "model": "BES880BSS",
+    "serial_number": "2148BES880BSS1AUC1",
+    "room": "Kitchen",
+    "condition": "Very Good",
+    "estimated_replacement_value_usd": 1099.95,
+    "description": "Brushed stainless steel automated touch-screen thermoJet espresso machine.",
+    "confidence": 0.97,
+    "source_image": "demo_kitchen_01.jpg"
+  },
+  {
+    "item_name": "MacBook Pro 16-inch M2 Max 32GB 1TB",
+    "category": "Electronics & Computers",
+    "brand": "Apple",
+    "model": "MacBookPro18,2",
+    "serial_number": "V3X7Y2ZQ9L",
+    "room": "Home Office",
+    "condition": "Excellent",
+    "estimated_replacement_value_usd": 3199.00,
+    "description": "Space Gray 16-inch Liquid Retina XDR notebook with Apple M2 Max chip.",
+    "confidence": 0.99,
+    "source_image": "demo_office_01.jpg"
+  }
+]

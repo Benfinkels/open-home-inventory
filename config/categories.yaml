@@ -1,0 +1,50 @@
+categories:
+  - id: "electronics_workstations"
+    name: "Electronics | Computers & Workstations"
+    description: "Desktop PCs, AI workstations, servers, high-performance computing rigs, custom builds."
+    typical_depreciation_years: 5
+
+  - id: "electronics_laptops"
+    name: "Electronics | Laptops & Mobile"
+    description: "Gaming laptops, ultrabooks, tablets, smartphones."
+    typical_depreciation_years: 4
+
+  - id: "electronics_displays"
+    name: "Electronics | Displays & Monitors"
+    description: "Curved gaming monitors, OLED displays, secondary office monitors."
+    typical_depreciation_years: 6
+
+  - id: "electronics_audio"
+    name: "Electronics | Audio & Home Theater"
+    description: "AV receivers, studio monitors, subwoofers, microphones, USB audio interfaces."
+    typical_depreciation_years: 8
+
+  - id: "sports_bicycles"
+    name: "Sports & Recreation | Bicycles"
+    description: "Full-suspension mountain bikes, gravel bikes, road bikes, hardtails, e-bikes."
+    typical_depreciation_years: 7
+
+  - id: "sports_fitness"
+    name: "Sports & Recreation | Fitness Equipment"
+    description: "Smart direct drive trainers, smartwatches, heart rate monitors, exercise equipment."
+    typical_depreciation_years: 5
+
+  - id: "smart_home"
+    name: "Electronics | Smart Home & Safety"
+    description: "Smart smoke detectors, mesh Wi-Fi systems, smart bridges, voice assistants."
+    typical_depreciation_years: 5
+
+  - id: "tools_outdoor"
+    name: "Tools & Outdoor Equipment"
+    description: "Cordless power tools, electric lawn mowers, leaf blowers, pole saws, hand tools."
+    typical_depreciation_years: 10
+
+  - id: "kitchen_appliances"
+    name: "Kitchen & Home Appliances"
+    description: "Espresso machines, stand mixers, coffee grinders, microwave ovens."
+    typical_depreciation_years: 8
+
+  - id: "apparel_luggage"
+    name: "Apparel, Bags & Luggage"
+    description: "Technical jackets, backpacks, hardshell luggage, outdoor footwear."
+    typical_depreciation_years: 6
