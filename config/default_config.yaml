@@ -1,38 +1,34 @@
-vision:
-  backend: "ollama"  # ollama | vllm | openai | custom
-  endpoint: "http://localhost:11434"
-  model: "minicpm-v:latest"
-  temperature: 0.1
-  timeout_seconds: 60
-  optical_crop:
-    enabled: true
-    zoom_factor: 2.0
-    padding_px: 50
-    min_confidence: 0.70
-
+dashboard:
+  debug: false
+  host: 127.0.0.1
+  port: 8080
 receipts:
-  provider: "mock"  # gog | imap | mock
-  account: "user@example.com"
-  lookback_days: 1095  # 3 years
+  account: user@example.com
+  lookback_days: 1095
+  provider: mock
   search_queries:
-    - "order confirmation OR receipt OR invoice"
-    - "from:amazon.com (subject:ordered OR subject:'your order')"
-    - "from:bestbuy.com (order OR pickup OR eReceipt)"
-    - "from:microcenter.com (order OR receipt OR pickup)"
-
+  - order confirmation OR receipt OR invoice
+  - from:amazon.com (subject:ordered OR subject:'your order')
+  - from:bestbuy.com (order OR pickup OR eReceipt)
+  - from:microcenter.com (order OR receipt OR pickup)
 reconciliation:
+  auto_update_valuation: true
   fuzzy_threshold: 0.72
   serial_number_exact_match: true
-  auto_update_valuation: true
-
 storage:
-  db_path: "./data/inventory.db"
-  json_output: "./data/master_inventory.json"
-  csv_output: "./data/master_inventory.csv"
-  summary_output: "./reports/INVENTORY_SUMMARY.md"
-  crops_dir: "./data/optical_crops"
-
-dashboard:
-  host: "127.0.0.1"
-  port: 8080
-  debug: false
+  crops_dir: ./data/optical_crops
+  csv_output: ./data/master_inventory.csv
+  db_path: ./data/inventory.db
+  json_output: ./data/master_inventory.json
+  summary_output: ./reports/INVENTORY_SUMMARY.md
+vision:
+  backend: ollama
+  endpoint: http://localhost:11434
+  model: minicpm-v:latest
+  optical_crop:
+    enabled: true
+    min_confidence: 0.7
+    padding_px: 50
+    zoom_factor: 2.0
+  temperature: 0.1
+  timeout_seconds: 60
