@@ -1,119 +1,100 @@
-# Open Home Inventory (OHI)
+# Open Home Inventory
+
+A local-first tool that scans room photos, slices lossless optical crops to read serial numbers, and reconciles them against digital receipts to build an audit-proof home insurance inventory.
 
 <div align="center">
 
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-brightgreen.svg)
-![Privacy](https://img.shields.io/badge/privacy-100%25%20Local%20%26%20Zero--PII-purple.svg)
-![Architecture](https://img.shields.io/badge/architecture-Multi--Modal%20Vision%20%2B%20Receipt%20Reconciliation-orange.svg)
-![Tests](https://img.shields.io/badge/tests-11%20passing-success.svg)
+![Local First](https://img.shields.io/badge/architecture-local--first%20%26%20offline-success.svg)
+![Tests](https://img.shields.io/badge/tests-11%20passing-brightgreen.svg)
 
-**Autonomous, Privacy-First Home Property Cataloging, Optical Asset Extraction & Cross-Modal Insurance Proof-of-Purchase Ledger**
-
-[Quickstart](#quickstart) • [Architecture](#architecture) • [Vision & Optical Cropping](#vision--optical-crop-engine) • [Receipt Parsers](#receipt-scraping--parsers) • [Web Dashboard](#modern-web-dashboard) • [Extending](#how-to-extend)
+[Why I Built This](#why-i-built-this) • [How It Works](#how-it-works) • [Quickstart](#quickstart) • [The Optical Crop Problem](#the-optical-crop-problem) • [Receipt Parsers](#receipt-parsers) • [Dashboard](#local-dashboard) • [Extending](#adding-new-receipt-parsers)
 
 </div>
 
 ---
 
-## The Problem: Why Traditional Home Inventories Fail
+## Why I Built This
 
-Most homeowners realize they need an itemized home inventory only *after* a catastrophic loss (fire, pipe burst, burglary). When filing high-value property claims, insurance underwriters routinely reject claims or drastically depreciate payouts due to:
-1. **The "Messy Photo" Problem:** A photo of a desk or garage contains dozens of items, but generic cloud vision models downsample 4K/8K images into tiny thumbnails (e.g. 512x512), completely destroying legible serial numbers, model stamped badges, and brand logos.
-2. **Missing Proof of Purchase:** Having a photograph of a $2,000 GPU or a $6,000 bicycle is insufficient; insurers demand proof of payment, merchant invoices, and serial numbers.
-3. **Manual Burden:** Manually typing hundreds of serial numbers and digging through 10 years of email receipts takes weeks and is rarely kept up to date.
+If you've ever dealt with homeowners or renters insurance after a burst pipe, theft, or fire, you know the drill: insurance adjusters don't just take your word for it. When you claim high-value electronics, camera gear, appliances, or a custom road bike, they demand proof:
+1. Proof you owned the item (photos).
+2. The specific make, model, and serial number (not just "a computer monitor").
+3. Proof of purchase (invoices, receipts, dates, and what you actually paid).
 
-**Open Home Inventory solves this end-to-end** using local multimodal AI, lossless optical patch extraction, and automated e-receipt parsing to build an audit-proof, insurance-ready inventory schedule in minutes.
+Most people either don't have an inventory at all, or they give up after spending an afternoon typing serial numbers into a spreadsheet.
 
----
-
-## Architecture Overview
-
-```
-                      ┌─────────────────────────────────────────┐
-                      │    Raw Room & Asset Photographs        │
-                      │       (Native 4K / 8K Camera)           │
-                      └────────────────────┬────────────────────┘
-                                           │
-                                           ▼
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│                          STAGE 1: MULTIMODAL DETECTION                            │
-│  Local Vision Model (Ollama MiniCPM-V / Qwen2.5-VL / vLLM / OpenAI API)           │
-│  Isolates multiple items, classifies categories, and outputs bounding coordinates │
-└──────────────────────────────────────────┬────────────────────────────────────────┘
-                                           │
-                                           ▼
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│                      STAGE 2: LOSSLESS OPTICAL PATCH CROPPING                     │
-│  OpticalCropEngine extracts 1:1 uncompressed pixel patches around each bounding   │
-│  box directly from native originals, bypassing downsampling blur                  │
-└──────────────────────────────────────────┬────────────────────────────────────────┘
-                                           │
-                                           ▼
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│                         STAGE 3: BADGE & SERIAL OCR                               │
-│  Focused secondary inspection detects stamped serial plates, regulatory badges,   │
-│  and manufacturer part numbers from the lossless optical crops                     │
-└──────────────────────────────────────────┬────────────────────────────────────────┘
-                                           │
-                                           ▼
-       ┌─────────────────────────────────────────────────────────────┐
-       │             STAGE 4: RECEIPT INGESTION & PARSING            │
-       │  Scrapes & parses e-receipts from direct export or emails:   │
-       │  • Amazon.com        • Micro Center        • Best Buy       │
-       │  • Direct OEM (Apple/NVIDIA)               • Bike Pro Shops │
-       └─────────────────────────────┬───────────────────────────────┘
-                                     │
-                                     ▼
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│                  STAGE 5: CROSS-MODAL RECONCILIATION ENGINE                       │
-│  Two-Tier Matching Algorithm:                                                     │
-│  1. Exact Serial Linker: 100% confidence match between badge OCR & receipt serial │
-│  2. Token Set & Sequence Matcher: Fuzzy similarity across brand, model, and specs │
-└────────────────────────────────────┬──────────────────────────────────────────────┘
-                                     │
-                                     ▼
-┌───────────────────────────────────────────────────────────────────────────────────┐
-│                        STAGE 6: AUDIT PERSISTENCE & EXPORTS                       │
-│  • Local SQLite Database (`data/inventory.db`)                                    │
-│  • Insurance-Standard CSV Schedule (`data/exports/inventory_schedule.csv`)        │
-│  • Executive Appraisal Markdown Report (`data/exports/appraisal_report.md`)       │
-│  • Interactive Dark-Mode Web Dashboard (`inventory-ai serve` on :8000)            │
-└───────────────────────────────────────────────────────────────────────────────────┘
-```
+I built this project to automate the entire process locally on my own hardware:
+- Take wide-angle room photos (desks, workshops, living rooms).
+- Detect items and automatically slice out **1:1 uncompressed optical crops** directly from the native camera resolution so stamped serial plates and model badges are actually legible.
+- Parse digital e-receipts from my inbox (Amazon, Micro Center, Best Buy, specialty bike shops, direct OEMs).
+- Cross-reference visual items against receipt line items using exact serial matching and fuzzy string similarity.
+- Export insurance-compliant CSV schedules and executive appraisal summaries, or view the whole portfolio in a local dark-mode dashboard.
 
 ---
 
-## Key Features
+## How It Works
 
-- **100% Local & Zero-PII by Design:** Runs entirely on your local machine. No images, personal receipts, home addresses, or financial data are sent to external servers.
-- **Hardware-Decoupled Execution:** Supports local Ollama endpoints (e.g. `minicpm-v`, `qwen2.5-vl`), vLLM, or offline synthetic mock mode. You can game on your GPU while running the entire inventory suite on CPU/RAM or local low-power models.
-- **Lossless Optical Patch Isolation:** Eliminates resolution loss by extracting pixel-perfect 1:1 patches for badge reading and serial auditing.
-- **Modular Merchant Parsers:** Out-of-the-box support for Amazon, Micro Center, Best Buy, Apple, NVIDIA, and specialty cycling retailers (Wheelworks / Lightspeed). Adding a new store takes fewer than 20 lines of code.
-- **Audit-Proof Valuation & Depreciation Engine:** Automatically calculates total replacement valuation vs. purchase price basis, computes verified purchase percentages, and generates claim-ready insurance reports.
-- **Modern Glassmorphism Web UI:** Clean, responsive, dark-mode dashboard featuring KPI summary cards, instant search, category/room filtering, and detailed asset inspection modals.
+```
+   Raw Room Photos (Native 4K / Phone Camera)
+                      │
+                      ▼
+ ┌─────────────────────────────────────────────────────────────┐
+ │ 1. Scene Detection (Local Ollama / vLLM / OpenAI API)       │
+ │    Finds all items in the room and gets bounding boxes      │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+                              ▼
+ ┌─────────────────────────────────────────────────────────────┐
+ │ 2. Lossless Optical Patch Cropper                           │
+ │    Pulls 1:1 uncompressed pixel crops from the original     │
+ │    photo so badges, barcodes, and serial plates stay sharp  │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+                              ▼
+ ┌─────────────────────────────────────────────────────────────┐
+ │ 3. Receipt Parsing (Local Scrapers & File Ingestion)        │
+ │    Parses line items, order numbers, prices & serials from: │
+ │    • Amazon        • Micro Center      • Best Buy           │
+ │    • Apple/NVIDIA  • Local Bike Shops  • Generic Fallback   │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+                              ▼
+ ┌─────────────────────────────────────────────────────────────┐
+ │ 4. Cross-Modal Reconciliation Engine                        │
+ │    • Tier 1: 100% exact match on hardware serial number     │
+ │    • Tier 2: Fuzzy Jaccard token matching on brand & model  │
+ └────────────────────────────┬────────────────────────────────┘
+                              │
+                              ▼
+ ┌─────────────────────────────────────────────────────────────┐
+ │ 5. Local Storage & Insurance Exports                        │
+ │    • SQLite database (`data/inventory.db`)                  │
+ │    • Insurance Schedule CSV (`data/exports/*.csv`)          │
+ │    • Markdown Appraisal Report (`data/exports/*.md`)        │
+ │    • Fast local web UI (`http://127.0.0.1:8000`)            │
+ └─────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Quickstart
 
-### 1. Installation
+### 1. Setup
 
 ```bash
-# Clone the repository
 git clone https://github.com/Benfinkels/open-home-inventory.git
 cd open-home-inventory
 
-# Create virtual environment and install dependencies
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 pip install -e .
 ```
 
-### 2. Run the Synthetic Demo in 5 Seconds
+### 2. Run the Demo
 
-Generate a complete demo portfolio with verified receipts, database records, and exported insurance schedules:
+You can test the entire pipeline immediately without needing a camera or your personal email:
 
 ```bash
 inventory-ai demo
@@ -140,142 +121,126 @@ Output:
 =================================================================
 ```
 
-### 3. Launch the Web Dashboard
+### 3. Open the Local Dashboard
 
 ```bash
 inventory-ai serve --host 127.0.0.1 --port 8000
 ```
-Open your browser to `http://127.0.0.1:8000` to explore the dashboard.
+Then visit `http://127.0.0.1:8000` in your browser.
 
 ---
 
-## CLI Reference
+## The Optical Crop Problem
 
-The `inventory-ai` command-line tool provides a unified interface for all inventory workflows:
+When you send a 24-megapixel photo of your desk or workshop to a standard vision LLM, the model resizes the image down to 512×512 or 768×768 pixels to stay within token limits. 
 
-| Command | Description | Example |
-| :--- | :--- | :--- |
-| `demo` | Generates synthetic sample inventory & verifies pipeline | `inventory-ai demo` |
-| `scan-photos` | Scans room photos and extracts items & optical crops | `inventory-ai scan-photos --input ./photos --room "Office"` |
-| `scrape-receipts` | Ingests e-receipts from files or email exports | `inventory-ai scrape-receipts --source ./receipts` |
-| `reconcile` | Runs cross-modal matching between vision & receipts | `inventory-ai reconcile --threshold 0.70` |
-| `serve` | Launches the interactive FastAPI web dashboard | `inventory-ai serve --port 8000` |
+At that resolution, you can tell there is a GPU or a monitor on the desk, but **the serial number sticker and regulatory model text become a blurry, unreadable smudge.**
 
----
-
-## Vision & Optical Crop Engine
-
-When a 24MP phone photo is submitted to a vision LLM, it is typically downscaled to fit within standard token limits (e.g. 512x512 or 768x768). Under this downscaling, stamped serial plates and small labels become an unreadable blur.
-
-The **Optical Crop Subsystem** (`src/vision/optical_crop.py`) solves this:
-1. The vision model analyzes the full scene once to generate normalized bounding boxes `[ymin, xmin, ymax, xmax]`.
-2. The `OpticalCropEngine` opens the original uncompressed image and slices a lossless 1:1 pixel patch with dynamic padding around each asset.
-3. The focused patch is saved to `data/optical_crops/` and passed to a secondary OCR inspection pass (`src/vision/badge_reader.py`) to extract clean alphanumeric serial numbers and model badges.
+Here is how this pipeline fixes that:
+1. **Pass 1 (Overview):** The vision model scans the whole photo once to detect items and return normalized coordinates `[ymin, xmin, ymax, xmax]`.
+2. **Pass 2 (Lossless Extraction):** [`OpticalCropEngine`](src/vision/optical_crop.py) re-opens the original high-res image and cuts out the exact bounding box with custom padding at full native resolution.
+3. **Pass 3 (Badge Inspection):** A secondary OCR pass inspects only that cropped patch, where the letters, numbers, and barcodes are still pin-sharp.
 
 ---
 
-## Receipt Scraping & Parsers
+## Receipt Parsers
 
-All receipt parsing is strictly decoupled through the `BaseReceiptParser` interface (`src/receipts/parsers/base.py`):
+Receipt handling is completely decoupled via [`BaseReceiptParser`](src/receipts/parsers/base.py).
 
-```python
-from src.receipts.parsers.base import BaseReceiptParser, ParsedReceipt, ParsedItem
-
-class BaseReceiptParser(ABC):
-    @abstractmethod
-    def can_parse(self, sender: str, subject: str, body: str) -> bool:
-        """Returns True if this parser handles the given message."""
-        pass
-
-    @abstractmethod
-    def parse(self, message_id: str, date: str, sender: str, subject: str, body: str) -> Optional[ParsedReceipt]:
-        """Extracts structured order, items, serials, and pricing."""
-        pass
-```
-
-### Supported Retailers
-
-- **Amazon.com:** Ingests order confirmations, extracting order IDs (`XXX-XXXXXXX-XXXXXXX`), item line names, and item prices.
-- **Micro Center:** Ingests in-store e-receipts and pickup confirmations, extracting product SKUs and physical serial numbers recorded at the register.
-- **Best Buy:** Extracts online orders and in-store pickup line items.
-- **Direct OEMs:** Supports Apple Store (`W...` order numbers) and NVIDIA Store hardware purchases.
-- **Specialty Bike Shops:** Ingests local bike shop work orders, Lightspeed invoices, frame serial numbers, and specialty retailer invoices (Wheelworks, Specialized, REI, Zwift).
-- **Generic Fallback:** Gracefully captures receipts from any merchant with currency figures and order references.
+Out of the box, it includes parsers for:
+- **Amazon:** Parses order numbers (`XXX-XXXXXXX-XXXXXXX`), item names, and line prices.
+- **Micro Center:** Parses in-store register e-receipts and pickup slips, extracting product SKUs and physical serial numbers scanned at the register.
+- **Best Buy:** Parses online orders and store pickups.
+- **Direct OEMs:** Apple Store invoices and NVIDIA Store orders.
+- **Specialty Bike Shops:** Work orders, Lightspeed invoices, and bike shop slips (Wheelworks, Specialized, REI, Zwift).
+- **Generic Fallback:** Catches order numbers and totals from any merchant with standard receipt wording.
 
 ---
 
-## How to Extend: Adding a New Merchant Parser
+## Adding New Receipt Parsers
 
-Adding a custom store (e.g. B&H Photo, Target, Walmart, or Home Depot) takes less than 20 lines of code:
+Adding support for any other store (B&H, Newegg, Target, Home Depot, etc.) takes less than 20 lines of Python.
 
-1. Create a new file `src/receipts/parsers/my_retailer.py`:
+1. Create `src/receipts/parsers/my_store.py`:
 ```python
 import re
 from typing import Optional
 from .base import BaseReceiptParser, ParsedReceipt, ParsedItem
 
-class MyRetailerParser(BaseReceiptParser):
+class MyStoreParser(BaseReceiptParser):
     def can_parse(self, sender: str, subject: str, body: str) -> bool:
-        return "myretailer.com" in sender.lower() or "my retailer" in body.lower()
+        return "mystore.com" in sender.lower() or "my store" in body.lower()
 
     def parse(self, message_id: str, date: str, sender: str, subject: str, body: str) -> Optional[ParsedReceipt]:
-        order_match = re.search(r"Order Number:\s*([A-Z0-9\-]+)", body)
-        total_match = re.search(r"Total:\s*\$?([0-9,]+\.[0-9]{2})", body)
+        order_m = re.search(r"Order Number:\s*([A-Z0-9\-]+)", body)
+        total_m = re.search(r"Total:\s*\$?([0-9,]+\.[0-9]{2})", body)
         
         return ParsedReceipt(
-            merchant="My Retailer",
-            order_number=order_match.group(1) if order_match else f"MR-{message_id[:8]}",
+            merchant="My Store",
+            order_number=order_m.group(1) if order_m else f"MS-{message_id[:8]}",
             purchase_date=date[:10],
-            total_usd=float(total_match.group(1).replace(",", "")) if total_match else 0.0,
+            total_usd=float(total_m.group(1).replace(",", "")) if total_m else 0.0,
             items=[ParsedItem(name="Purchased Item", price_usd=100.0)],
             source_message_id=message_id
         )
 ```
+
 2. Register it in `src/receipts/parser_registry.py`:
 ```python
-from .parsers.my_retailer import MyRetailerParser
-
-self.parsers.insert(0, MyRetailerParser())
+from .parsers.my_store import MyStoreParser
+self.parsers.insert(0, MyStoreParser())
 ```
 
 ---
 
-## Modern Web Dashboard
+## Local Dashboard
 
-The local web dashboard (`web/`) is built with FastAPI, Jinja2, and Vanilla CSS (no heavy external npm toolchains required).
+The dashboard (`web/`) is built with FastAPI and clean Vanilla CSS (no React or Node build steps needed).
 
-### Key Views:
-- **KPI Metrics:** Real-time calculation of total replacement cost, original purchase basis, receipt-verified ratio, and insurance audit readiness score (0–100).
-- **Search & Filters:** Instant live search across brand, model, serial number, room, and category.
-- **Audit Table:** Visual status badges showing verified proof-of-purchase vs. visual estimates.
-- **Item Inspection Modal:** Slices and displays bounding box coordinates, optical crop archives, and matched merchant order references.
-- **One-Click Export:** Download insurance schedules (`.csv`) and executive appraisal reports (`.md`) directly from the browser.
-
----
-
-## Zero-PII & Privacy Guarantee
-
-When sharing, adapting, or publishing this repository:
-- **No Private Data:** All sample files (`examples/`) use synthetic serial numbers, mock prices, and fictitious addresses (`Cambridge, MA`).
-- **No Credentials in Git:** The default `.gitignore` excludes `.env`, `*.db`, `*.jpg`, `*.png`, and email credentials.
-- **Deterministic CI:** Automated GitHub Actions run across Python 3.10, 3.11, and 3.12 without touching external networks.
+It features:
+- **KPI Cards:** Live calculation of total replacement cost, original purchase basis, receipt-verified percentage, and an audit-readiness score.
+- **Instant Search & Filtering:** Filter by room, category, verification status, or search by serial number.
+- **Item Detail Modal:** Inspects original bounding boxes, optical crop paths, and matched receipt order references.
+- **One-Click Export:** Download insurance CSV schedules or Markdown appraisal reports directly from the UI.
 
 ---
 
-## Running the Unit Tests
+## Privacy & Local-First Design
+
+Everything in this repo is designed to run entirely on your own machine. Your receipts, order histories, equipment serials, and home photos never get uploaded to third-party cloud servers or shared with anyone.
+
+- **Offline / Local Models:** Can run completely offline or against local model endpoints (e.g., Ollama running `minicpm-v` or `qwen2.5-vl`).
+- **Clean Test Fixtures:** The included demo fixtures (`examples/`) use synthetic test data (mock Cambridge, MA addresses, synthetic order numbers, and dummy serials) so you can test and develop without exposing personal info.
+- **Safe Git Configuration:** `.gitignore` is set up out of the box to prevent local databases (`*.db`), images, crops, and `.env` files from ever being committed to git.
+
+---
+
+## CLI Reference
+
+| Command | What it does | Example |
+| :--- | :--- | :--- |
+| `demo` | Generates a complete synthetic test portfolio | `inventory-ai demo` |
+| `scan-photos` | Scans room photos and extracts items & optical crops | `inventory-ai scan-photos ./photos` |
+| `scrape-receipts` | Scrapes receipts from email or directory | `inventory-ai scrape-receipts` |
+| `reconcile` | Runs matching between photos and receipts | `inventory-ai reconcile` |
+| `serve` | Launches the local web dashboard | `inventory-ai serve --port 8000` |
+
+---
+
+## Running Tests
 
 ```bash
 pytest tests/ -v
 ```
 
-All 11 tests validate the complete end-to-end flow:
-- `test_vision.py`: BoundingBox normalization and optical patch extraction.
-- `test_receipt_parsers.py`: Merchant regex extraction across Amazon, Micro Center, and Bike Shops.
-- `test_matcher.py`: Sequence matcher fuzzy similarity and exact serial linking.
-- `test_storage.py`: SQLite persistence and CSV/Markdown generation.
+All 11 unit tests run in under 0.25 seconds:
+- `test_vision.py`: Bounding boxes and optical crop extraction.
+- `test_receipt_parsers.py`: Merchant parsers across Amazon, Micro Center, and bike shops.
+- `test_matcher.py`: Fuzzy sequence matching and exact serial number linking.
+- `test_storage.py`: SQLite persistence and CSV / Markdown generation.
 
 ---
 
 ## License
 
-Distributed under the **MIT License**. See [`LICENSE`](LICENSE) for more information.
+MIT License. See [LICENSE](LICENSE) for details.

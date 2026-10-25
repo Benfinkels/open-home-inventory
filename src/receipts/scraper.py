@@ -114,7 +114,7 @@ class ReceiptScraper:
         return []
 
     def _fetch_mock_receipts(self) -> List[ScrapedMessage]:
-        """Returns realistic, 100% PII-free synthetic receipts for demonstration."""
+        """Returns realistic synthetic receipts for offline demo and testing."""
         return [
             ScrapedMessage(
                 message_id="MOCK-NV-001",
