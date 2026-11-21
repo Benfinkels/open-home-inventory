@@ -158,3 +158,38 @@ class InventoryMatcher:
             assigned.get(i_idx, MatchResult(item=item, match_confidence=0.0, match_type="none"))
             for i_idx, item in enumerate(items)
         ]
+
+    def rank_receipt_candidates(
+        self,
+        item: DetectedItem,
+        receipts: List[Tuple[int, ParsedReceipt]],
+        top_k: int = 3,
+    ) -> List[Dict[str, object]]:
+        """Return top-K scored receipt candidates for interactive 1-click linking (even below threshold)."""
+        scored: List[Dict[str, object]] = []
+        for rec_id, rec in receipts:
+            best_score = 0.0
+            best_line: Optional[ParsedItem] = None
+            best_type = "none"
+            for line in rec.items:
+                sc, mt = self._score_pair(item, line)
+                if sc > best_score:
+                    best_score = sc
+                    best_line = line
+                    best_type = mt
+            scored.append(
+                {
+                    "receipt_id": rec_id,
+                    "merchant": rec.merchant,
+                    "order_number": rec.order_number,
+                    "purchase_date": rec.purchase_date,
+                    "total_usd": rec.total_usd,
+                    "matched_line": best_line.name if best_line else "",
+                    "line_price_usd": best_line.price_usd if best_line else rec.total_usd,
+                    "line_serial": best_line.serial_number if best_line else None,
+                    "confidence": round(best_score, 3),
+                    "match_type": best_type,
+                }
+            )
+        scored.sort(key=lambda x: float(x["confidence"]), reverse=True)
+        return scored[:top_k]

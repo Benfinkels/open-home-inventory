@@ -35,3 +35,8 @@ vision:
     zoom_factor: 2.0
   temperature: 0.1
   timeout_seconds: 90
+escalation:
+  backend: ollama
+  model: qwen3.5:9b
+  min_value_usd: 500
+  max_cost_usd: 0.25

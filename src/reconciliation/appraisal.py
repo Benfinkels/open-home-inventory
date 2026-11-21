@@ -1,5 +1,6 @@
+from datetime import datetime
 import logging
-from typing import Any, Dict, List, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from pydantic import BaseModel, Field
 
@@ -7,10 +8,71 @@ from .matcher import MatchResult
 
 logger = logging.getLogger(__name__)
 
+# Standard straight-line useful life (years) by category keyword for ACV estimation.
+# shortcut: simplified category depreciation curve; upgrade to carrier-specific schedules if filing a large claim.
+CATEGORY_USEFUL_LIFE_YEARS = {
+    "computer": 5.0,
+    "laptop": 5.0,
+    "electronics": 5.0,
+    "monitor": 6.0,
+    "photography": 7.0,
+    "camera": 7.0,
+    "audio": 8.0,
+    "bicycle": 10.0,
+    "bike": 10.0,
+    "sports": 10.0,
+    "tool": 10.0,
+    "appliance": 12.0,
+    "kitchen": 10.0,
+    "furniture": 15.0,
+}
+
+CONDITION_MULTIPLIER = {
+    "mint": 0.95,
+    "excellent": 0.85,
+    "good": 0.72,
+    "fair": 0.55,
+    "poor": 0.35,
+}
+
+
+def estimate_acv(
+    rcv_usd: float,
+    category: Optional[str] = None,
+    purchase_date: Optional[str] = None,
+    condition: Optional[str] = None,
+) -> float:
+    """Estimate Actual Cash Value (depreciated RCV) with a 25% salvage floor."""
+    if not rcv_usd or rcv_usd <= 0:
+        return 0.0
+    cat_lower = (category or "").lower()
+    life_years = 10.0
+    for kw, years in CATEGORY_USEFUL_LIFE_YEARS.items():
+        if kw in cat_lower:
+            life_years = years
+            break
+
+    age_years: Optional[float] = None
+    if purchase_date:
+        for fmt in ("%Y-%m-%d", "%Y/%m/%d", "%m/%d/%Y", "%Y"):
+            try:
+                dt = datetime.strptime(str(purchase_date).strip()[:10], fmt)
+                age_years = max(0.0, (datetime.now() - dt).days / 365.25)
+                break
+            except ValueError:
+                continue
+
+    if age_years is not None:
+        factor = max(0.25, 1.0 - (age_years / life_years))
+    else:
+        factor = CONDITION_MULTIPLIER.get((condition or "good").strip().lower(), 0.72)
+    return round(rcv_usd * factor, 2)
+
 
 class PortfolioAuditStats(BaseModel):
     total_items: int
     total_replacement_value_usd: float
+    total_acv_usd: float = 0.0
     verified_items_count: int
     verified_valuation_usd: float
     verification_percentage: float
@@ -32,6 +94,7 @@ class AppraisalEngine:
     def evaluate_portfolio(self, matches: List[MatchResult]) -> Tuple[List[Dict[str, Any]], PortfolioAuditStats]:
         reconciled_records = []
         total_value = 0.0
+        total_acv = 0.0
         verified_value = 0.0
         verified_count = 0
         categories: Dict[str, Dict[str, Any]] = {}
@@ -52,6 +115,8 @@ class AppraisalEngine:
             if rep_val <= 0.0 and purchase_price and purchase_price > 0.0:
                 rep_val = purchase_price
 
+            acv_val = estimate_acv(rep_val, it.category, purchase_date, it.condition)
+
             evidence_str = None
             if is_verified and m.receipt:
                 evidence_str = f"{m.receipt.merchant} Order #{m.receipt.order_number} ({m.receipt.purchase_date})"
@@ -64,6 +129,7 @@ class AppraisalEngine:
                 "room": it.room or "General",
                 "condition": it.condition,
                 "estimated_replacement_value_usd": round(rep_val, 2),
+                "estimated_acv_usd": acv_val,
                 "receipt_verified": is_verified,
                 "purchase_price_usd": round(purchase_price, 2) if purchase_price else None,
                 "purchase_date": purchase_date,
@@ -80,6 +146,7 @@ class AppraisalEngine:
             reconciled_records.append(record)
 
             total_value += rep_val
+            total_acv += acv_val
             if is_verified:
                 verified_count += 1
                 verified_value += rep_val
@@ -113,6 +180,7 @@ class AppraisalEngine:
         stats = PortfolioAuditStats(
             total_items=len(reconciled_records),
             total_replacement_value_usd=round(total_value, 2),
+            total_acv_usd=round(total_acv, 2),
             verified_items_count=verified_count,
             verified_valuation_usd=round(verified_value, 2),
             verification_percentage=round(pct, 1),

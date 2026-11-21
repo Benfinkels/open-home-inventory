@@ -86,17 +86,26 @@ class ReceiptScraper:
 
     @staticmethod
     def _extract_text_from_payload(part: Dict[str, Any]) -> str:
-        texts = []
+        from .parser_registry import strip_html
+
+        mime = (part.get("mimeType") or "").lower()
+        plain_texts: List[str] = []
+        html_texts: List[str] = []
         body = part.get("body", {})
         if "data" in body:
             try:
                 raw = base64.urlsafe_b64decode(body["data"] + "==").decode("utf-8", errors="ignore")
-                texts.append(raw)
+                if "html" in mime or "<html" in raw.lower():
+                    html_texts.append(strip_html(raw))
+                else:
+                    plain_texts.append(raw)
             except Exception:
                 pass
         for p in part.get("parts", []):
-            texts.append(ReceiptScraper._extract_text_from_payload(p))
-        return " ".join(texts)
+            sub = ReceiptScraper._extract_text_from_payload(p)
+            if sub:
+                plain_texts.append(sub)
+        return "\n".join(plain_texts or html_texts).strip()
 
     def _fetch_file_receipts(self, file_path: str = "./examples/sample_receipt.txt") -> List[ScrapedMessage]:
         if os.path.exists(file_path):

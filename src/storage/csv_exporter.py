@@ -8,10 +8,14 @@ logger = logging.getLogger(__name__)
 CSV_HEADERS = [
     "item_name",
     "category",
+    "room",
+    "sub_location",
     "brand",
     "model_or_identifiers",
     "condition",
+    "quantity",
     "estimated_replacement_value_usd",
+    "estimated_acv_usd",
     "receipt_verified",
     "purchase_price_usd",
     "purchase_date",
@@ -19,6 +23,7 @@ CSV_HEADERS = [
     "order_number",
     "serial_number",
     "receipt_evidence",
+    "review_status",
     "source_image",
     "description"
 ]

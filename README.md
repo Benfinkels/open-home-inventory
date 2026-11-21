@@ -7,7 +7,7 @@ A local-first tool that scans room photos, slices lossless optical crops to read
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-brightgreen.svg)
 ![Local First](https://img.shields.io/badge/architecture-local--first%20%26%20offline-success.svg)
-![Tests](https://img.shields.io/badge/tests-27%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-36%20passing-brightgreen.svg)
 
 [Why I Built This](#why-i-built-this) • [How It Works](#how-it-works) • [Quickstart](#quickstart) • [The Optical Crop Problem](#the-optical-crop-problem) • [Receipt Parsers](#receipt-parsers) • [Dashboard](#local-dashboard) • [Extending](#adding-new-receipt-parsers)
 
@@ -207,15 +207,16 @@ self.parsers.insert(0, MyStoreParser())
 
 ---
 
-## Local Dashboard
+## Local Dashboard (Archival Property Ledger)
 
-The dashboard (`web/`) is built with FastAPI and clean Vanilla CSS (no React or Node build steps needed).
+The dashboard (`web/`) is built with FastAPI and zero-build Vanilla HTML/CSS/JS — completely offline with **no external font or CDN requests** — designed around a calm **Warm Archival Paper** light default with a **Graphite Vault** dark toggle.
 
 It features:
-- **KPI Cards:** Live calculation of total replacement cost, original purchase basis, receipt-verified percentage, and an audit-readiness score.
-- **Instant Search & Filtering:** Filter by room, category, verification status, or search by serial number.
-- **Item Detail Modal:** Inspects original bounding boxes, optical crop paths, and matched receipt order references.
-- **One-Click Export:** Download insurance CSV schedules or Markdown appraisal reports directly from the UI.
+- **Unified Hairline Ledger Strip:** Live RCV, depreciated ACV, receipt-backed percentage, `>= $500` missing-evidence triage count, and pending escalation proposals count.
+- **Keyboard-First Triage Drawer (`J`/`K`/`Enter`/`Esc`):** Inline editing of brand, model, serial, room, sub-location, valuation, and notes — with `user_edited_fields` protection so automated rescans or reconciles never overwrite your edits.
+- **Multi-Angle Photo Merge & Close-Up Badge Upload:** Select duplicate detections across photos to merge all angles into one asset (`item_photos`), or drag-and-drop a close-up serial sticker photo for EXIF-stripped storage + immediate `BadgeReader` OCR suggestions.
+- **Escalation Diff Queue & 1-to-1 Receipt Linker:** Review side-by-side escalation proposals (`Accept` / `Reject`) and link Top-3 candidate receipts in one click (protected from auto-overwrite).
+- **One-Click Claim Pack `.zip`:** Exports an insurer-ready `.zip` bundle containing the CSV schedule, Markdown appraisal report, `receipts.json`, and all EXIF-stripped crops & close-up serial photos.
 
 ---
 
@@ -223,10 +224,10 @@ It features:
 
 Everything in this repo is designed to run entirely on your own machine. Your receipts, order histories, equipment serials, and home photos never get uploaded to third-party cloud servers or shared with anyone.
 
-- **Offline / Local Models:** Can run completely offline or against local model endpoints (e.g., Ollama running `gemma4:e2b-it-q4_K_M` with `keep_alive="15m"` and `think=False`, or any OpenAI-compatible / Gemini endpoint). Never silently fabricates mock items when a real backend errors.
-- **EXIF/GPS Stripping & Serial Redaction:** Saved optical crops and annotated overlays automatically strip all EXIF/GPS metadata, and `redact_serial()` masks sensitive serial numbers for safe sharing.
-- **Clean Test Fixtures:** The included demo fixtures (`examples/`) use synthetic test data so you can test and develop without exposing personal info.
-- **Safe Git Configuration:** `.gitignore` blocks local databases (`*.db`), `local_photos/`, `data/`, `reports/`, and `.env` files from ever being committed to git.
+- **Zero-API-Cost Local & Agent Escalation:** Defaults to local Ollama (`gemma4:e2b-it-q4_K_M` for fast 2-stage sweep, `qwen3.5:9b` for `$0` local multimodal high-value escalation) plus an offline `proposals export-candidates` / `import` handoff so your existing interactive multimodal agent can inspect high-value crops directly at `$0` extra API cost. Cloud backends (`--backend gemini`, `--backend openai-compat`) are strictly opt-in and guarded by `--dry-run` and `--max-cost-usd`.
+- **OpenClaw & Webhook Native:** Pipe pending escalation digests straight to **OpenClaw** (`--notify-openclaw`) or any Discord / generic agent webhook (`--notify-webhook <url>`), and accept/reject proposals from chat via `inventory-ai proposals apply <id>`.
+- **EXIF/GPS Stripping & Serial Redaction:** Saved optical crops, close-up badges, and overlays automatically strip all EXIF/GPS metadata, and `redact_serial()` masks sensitive serial numbers for safe sharing.
+- **Clean Test Fixtures & Hygiene Guard:** `tests/test_hygiene.py` asserts that no private LAN/Tailscale IPs or personal strings exist anywhere in tracked code.
 
 ---
 
@@ -236,9 +237,11 @@ Everything in this repo is designed to run entirely on your own machine. Your re
 | :--- | :--- | :--- |
 | `demo` | Generates a complete synthetic test portfolio | `inventory-ai demo` |
 | `scan-photos` | 2-stage scan (detect → 1:1 EXIF-stripped crop → Badge OCR → SHA-256 resume & dedupe) | `inventory-ai scan-photos ./local_photos --model gemma4:e2b-it-q4_K_M --save-overlays --dedupe` |
-| `scrape-receipts` | Scrapes receipts from email or file | `inventory-ai scrape-receipts --file receipts.txt` |
-| `reconcile` | Runs quantity-aware 1-to-1 matching + high-value missing-evidence audit | `inventory-ai reconcile --dedupe` |
-| `serve` | Launches the local web dashboard (with mounted `/crops` previews) | `inventory-ai serve --port 8000` |
+| `scrape-receipts` | Ingests `.pdf` (pure-Python `pypdf`), `.eml` (with HTML strip + PDF attachments), `.txt`, `.jpg`, or Gmail (`gog`) | `inventory-ai scrape-receipts --dir ./local_receipts` |
+| `escalate-high-value` | Re-inspects high-value items via `$0` local `qwen3.5:9b` (or opt-in cloud) into a diff review queue + OpenClaw/Discord notify | `inventory-ai escalate-high-value --min-value 500 --dry-run` |
+| `proposals` | Two-way agent & OpenClaw CLI (`list`, `export-candidates`, `import`, `apply`, `reject`) | `inventory-ai proposals export-candidates --out candidates.json` |
+| `reconcile` | Non-destructive 1-to-1 receipt matching + ACV estimation + missing-evidence audit (preserves manual edits & links) | `inventory-ai reconcile --dedupe` |
+| `serve` | Launches the local Archival Property Ledger dashboard (with `/crops`, `/overlays`, and Claim Pack `.zip`) | `inventory-ai serve --port 8080` |
 
 ---
 
@@ -248,11 +251,11 @@ Everything in this repo is designed to run entirely on your own machine. Your re
 pytest tests/ -v
 ```
 
-All 27 unit tests run offline in under 1 second:
-- `test_vision.py` & `test_pipeline_upgrades.py`: Bounding boxes, portrait EXIF transpose + GPS stripping, Ollama `keep_alive`/`think=False` payloads, no silent mock fallback, SHA-256 resume, cross-photo dedup, 1-to-1 receipt matching, and missing-evidence auditing.
-- `test_receipt_parsers.py`: Merchant parsers across Amazon, Micro Center, and bike shops.
-- `test_matcher.py` & `test_matcher_standalone.py`: Fuzzy sequence matching and exact serial number linking.
-- `test_storage.py`: SQLite persistence and CSV / Markdown generation.
+All 36 unit & API integration tests run offline in ~1 second:
+- `test_v3_features.py`: Schema migration + `user_edited_fields` protection, multi-angle merge, ACV estimation, HTML-email & `.eml` receipt ingestion, `$0` escalation + MiniMax text-only guard + agent handoff + Discord/OpenClaw notify, and end-to-end FastAPI CRUD + Claim Pack `.zip`.
+- `test_hygiene.py`: Privacy regression scan across all tracked source, test, config, example, and web files.
+- `test_vision.py` & `test_pipeline_upgrades.py`: Bounding boxes, portrait EXIF transpose + GPS stripping, Ollama `keep_alive`/`think=False` payloads, IoU NMS, SHA-256 resume, cross-photo dedup, 1-to-1 receipt matching, and missing-evidence auditing.
+- `test_receipt_parsers.py`, `test_matcher.py`, `test_storage.py`: Merchant parsers, exact serial & fuzzy matching, SQLite persistence, and CSV/Markdown exports.
 
 ---
 

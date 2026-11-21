@@ -7,7 +7,8 @@ from typing import Any, Dict, List
 
 import yaml
 
-from .receipts.parser_registry import ReceiptParserRegistry, parse_receipt_text
+from .receipts.ingestor import LocalReceiptIngestor
+from .receipts.parser_registry import ReceiptParserRegistry
 from .receipts.parsers.base import ParsedReceipt
 from .receipts.scraper import ReceiptScraper
 from .reconciliation.appraisal import AppraisalEngine
@@ -17,6 +18,14 @@ from .storage.database import InventoryDatabase, sha256_file
 from .storage.markdown_exporter import export_inventory_markdown
 from .vision.badge_reader import BadgeReader
 from .vision.detector import DetectedItem, VisionDetector
+from .vision.escalator import (
+    escalate_high_value_items,
+    export_candidates_bundle,
+    format_escalation_digest,
+    import_proposals_bundle,
+    send_openclaw_notification,
+    send_webhook_notification,
+)
 from .vision.optical_crop import OpticalCropEngine, sanitize_slug
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -187,11 +196,67 @@ def main():
     scan_p.add_argument("--limit", type=int, default=None, help="Process at most N photos")
 
     # Scrape Receipts
-    scrape_p = subparsers.add_parser("scrape-receipts", help="Scrape order receipts from email or file")
-    scrape_p.add_argument("--query", type=str, default="receipt OR order OR invoice", help="Search query")
+    scrape_p = subparsers.add_parser("scrape-receipts", help="Ingest order receipts from folder, file, or Gmail")
+    scrape_p.add_argument("--dir", type=str, default=None, help="Directory of .pdf/.eml/.txt/.jpg receipts")
+    scrape_p.add_argument("--file", type=str, default=None, help="Single receipt file (.txt/.eml/.pdf/.jpg)")
+    scrape_p.add_argument("--provider", type=str, default=None, choices=["mock", "gog", "file"], help="Email provider")
+    scrape_p.add_argument("--query", type=str, default="receipt OR order OR invoice", help="Gmail search query")
     scrape_p.add_argument("--max", type=int, default=25, help="Maximum emails to retrieve")
-    scrape_p.add_argument("--file", type=str, default=None, help="Path to text file containing receipts")
+    scrape_p.add_argument("--llm-fallback", action="store_true", help="Use local Ollama or OpenAI-compat JSON fallback for messy receipts")
+    scrape_p.add_argument("--llm-backend", type=str, default="ollama", choices=["ollama", "openai-compat", "minimax"])
+    scrape_p.add_argument("--llm-endpoint", type=str, default=None)
+    scrape_p.add_argument("--llm-model", type=str, default=None)
+    scrape_p.add_argument("--ocr-images", action="store_true", help="Run local Vision OCR on receipt image files (.jpg/.png)")
     scrape_p.add_argument("--db-path", type=str, default=None, help="Override SQLite database path")
+
+    # Escalate High-Value Items ($0 local Ollama default; opt-in cloud or Antigravity agent handoff)
+    esc_p = subparsers.add_parser("escalate-high-value", help="Re-inspect high-value items with a stronger multimodal model")
+    esc_p.add_argument("--min-value", type=float, default=500.0, help="Minimum RCV threshold in USD")
+    esc_p.add_argument("--categories", type=str, default=None, help="Comma-separated category keywords to target")
+    esc_p.add_argument("--backend", type=str, default="ollama", choices=["ollama", "openai-compat", "gemini", "mock"])
+    esc_p.add_argument("--endpoint", type=str, default=None, help="Model endpoint URL (default from config)")
+    esc_p.add_argument("--model", type=str, default="qwen3.5:9b", help="Multimodal model ID (default: qwen3.5:9b on local Ollama)")
+    esc_p.add_argument("--limit", type=int, default=None, help="Maximum items to escalate")
+    esc_p.add_argument("--dry-run", action="store_true", help="Print candidate count and estimated cost without calling any model")
+    esc_p.add_argument("--auto-apply", action="store_true", help="Apply proposals immediately instead of queuing for review")
+    esc_p.add_argument("--max-cost-usd", type=float, default=0.25, help="Hard USD budget cap for cloud backends")
+    esc_p.add_argument("--json", action="store_true", dest="as_json", help="Emit machine-readable JSON output")
+    esc_p.add_argument("--notify-webhook", type=str, default=None, help="Send digest to Discord or generic JSON webhook URL")
+    esc_p.add_argument("--notify-openclaw", action="store_true", help="Pipe digest to OpenClaw (Alfred) via stdin")
+    esc_p.add_argument("--dashboard-url", type=str, default="http://127.0.0.1:8080", help="Dashboard link included in notifications")
+    esc_p.add_argument("--db-path", type=str, default=None, help="Override SQLite database path")
+
+    # Proposals CLI (for Web UI, OpenClaw/Alfred, and $0 Antigravity agent handoff)
+    prop_p = subparsers.add_parser("proposals", help="Inspect, export, import, accept, or reject escalation proposals")
+    prop_sub = prop_p.add_subparsers(dest="prop_action", required=True)
+
+    p_list = prop_sub.add_parser("list", help="List escalation proposals")
+    p_list.add_argument("--status", type=str, default="pending", choices=["pending", "accepted", "rejected", "all"])
+    p_list.add_argument("--json", action="store_true", dest="as_json")
+    p_list.add_argument("--db-path", type=str, default=None)
+
+    p_exp = prop_sub.add_parser("export-candidates", help="Export high-value candidate crops for $0 Antigravity/agent vision inspection")
+    p_exp.add_argument("--min-value", type=float, default=500.0)
+    p_exp.add_argument("--categories", type=str, default=None)
+    p_exp.add_argument("--limit", type=int, default=None)
+    p_exp.add_argument("--out", type=str, default=None, help="Optional output JSON file (default: stdout)")
+    p_exp.add_argument("--db-path", type=str, default=None)
+
+    p_imp = prop_sub.add_parser("import", help="Import JSON proposals produced by Antigravity or an external agent")
+    p_imp.add_argument("json_file", type=str, help="Path to JSON file (array or {'proposals': [...]})")
+    p_imp.add_argument("--auto-apply", action="store_true")
+    p_imp.add_argument("--notify-webhook", type=str, default=None)
+    p_imp.add_argument("--notify-openclaw", action="store_true")
+    p_imp.add_argument("--db-path", type=str, default=None)
+
+    p_app = prop_sub.add_parser("apply", help="Accept and apply a pending proposal by ID")
+    p_app.add_argument("proposal_id", type=int)
+    p_app.add_argument("--force", action="store_true", help="Overwrite user-edited fields")
+    p_app.add_argument("--db-path", type=str, default=None)
+
+    p_rej = prop_sub.add_parser("reject", help="Reject a pending proposal by ID")
+    p_rej.add_argument("proposal_id", type=int)
+    p_rej.add_argument("--db-path", type=str, default=None)
 
     # Reconcile
     recon_p = subparsers.add_parser("reconcile", help="Reconcile visual detections against parsed receipts")
@@ -201,7 +266,7 @@ def main():
 
     # Serve
     serve_p = subparsers.add_parser("serve", help="Launch local interactive web dashboard")
-    serve_p.add_argument("--port", type=int, default=8000, help="Web server port")
+    serve_p.add_argument("--port", type=int, default=8080, help="Web server port")
     serve_p.add_argument("--host", type=str, default="127.0.0.1", help="Web server host")
 
     args = parser.parse_args()
@@ -253,26 +318,43 @@ def main():
     elif args.command == "scrape-receipts":
         cfg = load_config()
         r_cfg = cfg.get("receipts", {})
+        v_cfg = cfg.get("vision", {})
         s_cfg = cfg.get("storage", {})
         db = InventoryDatabase(args.db_path or s_cfg.get("db_path", "./data/inventory.db"))
 
-        if args.file and os.path.exists(args.file):
-            print(f"[*] Ingesting receipt file: {args.file}")
-            with open(args.file, "r", encoding="utf-8") as f:
-                content = f.read()
-            blocks = content.split("=== END_OF_RECEIPT ===")
-            receipts = []
-            for b in blocks:
-                cleaned = b.strip()
-                if len(cleaned) > 20:
-                    parsed = parse_receipt_text(cleaned)
-                    if parsed:
-                        db.save_receipt(parsed)
-                        receipts.append(parsed)
-                        print(f"      -> Ingested {parsed.merchant} #{parsed.order_number} (${parsed.total_usd:,.2f})")
+        target_path = args.dir or args.file
+        if target_path and os.path.exists(target_path):
+            print(f"[*] Ingesting receipts from: {target_path}")
+            v_det = (
+                VisionDetector(
+                    backend=v_cfg.get("backend", "ollama"),
+                    endpoint=v_cfg.get("endpoint", "http://localhost:11434"),
+                    model=v_cfg.get("model", "gemma4:e2b-it-q4_K_M"),
+                    keep_alive=str(v_cfg.get("keep_alive", "15m")),
+                )
+                if args.ocr_images
+                else None
+            )
+            llm_ep = args.llm_endpoint or (
+                "https://api.minimax.io" if args.llm_backend == "minimax" else v_cfg.get("endpoint", "http://localhost:11434")
+            )
+            llm_mod = args.llm_model or (
+                "MiniMax-M2.7" if args.llm_backend == "minimax" else v_cfg.get("model", "gemma4:e2b-it-q4_K_M")
+            )
+            ingestor = LocalReceiptIngestor(
+                vision_detector=v_det,
+                llm_fallback=args.llm_fallback,
+                llm_backend=args.llm_backend,
+                llm_endpoint=llm_ep,
+                llm_model=llm_mod,
+            )
+            receipts = ingestor.ingest_path(target_path)
+            for parsed in receipts:
+                db.save_receipt(parsed)
+                print(f"      -> Ingested {parsed.merchant} #{parsed.order_number} (${parsed.total_usd:,.2f})")
             print(f"[✓] Ingested and stored {len(receipts)} receipts into database.")
         else:
-            provider = r_cfg.get("provider", "mock")
+            provider = args.provider or r_cfg.get("provider", "mock")
             scraper = ReceiptScraper(provider=provider)
             messages = scraper.fetch_receipts(query=args.query, max_results=args.max)
             registry = ReceiptParserRegistry()
@@ -284,6 +366,111 @@ def main():
                     saved_count += 1
                     print(f"      -> Ingested {rec.merchant} #{rec.order_number} (${rec.total_usd:,.2f})")
             print(f"[✓] Retrieved and stored {saved_count} receipts into database.")
+
+    elif args.command == "escalate-high-value":
+        cfg = load_config()
+        v_cfg = cfg.get("vision", {})
+        s_cfg = cfg.get("storage", {})
+        db = InventoryDatabase(args.db_path or s_cfg.get("db_path", "./data/inventory.db"))
+        cats = [c.strip() for c in args.categories.split(",")] if args.categories else None
+
+        res = escalate_high_value_items(
+            db=db,
+            backend=args.backend,
+            endpoint=args.endpoint or v_cfg.get("endpoint", "http://localhost:11434"),
+            model=args.model,
+            min_value=args.min_value,
+            categories=cats,
+            limit=args.limit,
+            dry_run=args.dry_run,
+            auto_apply=args.auto_apply,
+            max_cost_usd=args.max_cost_usd,
+            keep_alive=str(v_cfg.get("keep_alive", "15m")),
+        )
+
+        if not args.dry_run and (args.notify_webhook or args.notify_openclaw):
+            pending = db.list_proposals(status="pending")
+            missing_cnt = sum(
+                1
+                for it in db.get_all_items()
+                if float(it.get("estimated_replacement_value_usd") or 0.0) >= 500.0
+                and (not it.get("receipt_verified") or not (it.get("serial_number") or "").strip())
+            )
+            digest = format_escalation_digest(pending, missing_evidence_count=missing_cnt, dashboard_url=args.dashboard_url)
+            if args.notify_webhook:
+                send_webhook_notification(args.notify_webhook, digest, structured_payload=res)
+                res["notified_webhook"] = True
+            if args.notify_openclaw:
+                send_openclaw_notification(digest)
+                res["notified_openclaw"] = True
+
+        if args.as_json:
+            print(json.dumps(res, indent=2))
+        elif args.dry_run:
+            print(
+                f"[DRY RUN] {res['candidates']} candidate items (>= ${args.min_value:,.0f}) | "
+                f"backend={res['backend']} model={res['model']} | est_cost=${res['estimated_total_cost_usd']:.4f}"
+            )
+            for row in res.get("preview", []):
+                print(
+                    f"  - #{row['item_id']} [{row['room']}] {row['item_name']} "
+                    f"(${float(row['current_value_usd'] or 0):,.0f}) | {len(row['images'])} img(s)"
+                )
+        else:
+            print(
+                f"[✓] Escalation complete: {len(res['proposals_created'])} proposals queued "
+                f"({res['applied_count']} auto-applied), {len(res['errors'])} errors | "
+                f"est_cost=${res.get('actual_est_cost_usd', 0.0):.4f}"
+            )
+
+    elif args.command == "proposals":
+        cfg = load_config()
+        s_cfg = cfg.get("storage", {})
+        db = InventoryDatabase(args.db_path or s_cfg.get("db_path", "./data/inventory.db"))
+
+        if args.prop_action == "list":
+            props = db.list_proposals(status=args.status)
+            if args.as_json:
+                print(json.dumps(props, indent=2))
+            elif not props:
+                print(f"[*] No {args.status} proposals.")
+            else:
+                for p in props:
+                    print(
+                        f"#{p['id']} [{p['status']}] Item #{p['item_id']} ({p['item_name']}) "
+                        f"-> Brand: {p['proposed_brand']} | Model: {p['proposed_model']} | "
+                        f"Serial: {p['proposed_serial']} | RCV: {p['proposed_value_usd']} ({p['provider']}/{p['model']})"
+                    )
+        elif args.prop_action == "export-candidates":
+            cats = [c.strip() for c in args.categories.split(",")] if args.categories else None
+            bundle = export_candidates_bundle(db, min_value=args.min_value, categories=cats, limit=args.limit)
+            payload_str = json.dumps(bundle, indent=2)
+            if args.out:
+                Path(args.out).write_text(payload_str, encoding="utf-8")
+                print(f"[✓] Exported {bundle['count']} high-value candidate items to {args.out}")
+            else:
+                print(payload_str)
+        elif args.prop_action == "import":
+            raw = json.loads(Path(args.json_file).read_text(encoding="utf-8"))
+            entries = raw.get("proposals", []) if isinstance(raw, dict) else raw
+            ids = import_proposals_bundle(db, entries, auto_apply=args.auto_apply)
+            print(f"[✓] Imported {len(ids)} proposals: {ids}")
+            if args.notify_webhook or args.notify_openclaw:
+                pending = db.list_proposals(status="pending")
+                digest = format_escalation_digest(pending)
+                if args.notify_webhook:
+                    send_webhook_notification(args.notify_webhook, digest, structured_payload={"imported_ids": ids})
+                if args.notify_openclaw:
+                    send_openclaw_notification(digest)
+        elif args.prop_action == "apply":
+            updated = db.apply_proposal(args.proposal_id, force=args.force)
+            if not updated:
+                print(f"[!] Proposal #{args.proposal_id} not found.")
+            else:
+                print(f"[✓] Applied proposal #{args.proposal_id} to Item #{updated['id']} ({updated['item_name']}).")
+        elif args.prop_action == "reject":
+            ok = db.reject_proposal(args.proposal_id)
+            print(f"[✓] Rejected proposal #{args.proposal_id}." if ok else f"[!] Proposal #{args.proposal_id} not found.")
 
     elif args.command == "reconcile":
         cfg = load_config()
@@ -322,10 +509,14 @@ def main():
         ]
 
         receipts = []
+        receipt_id_by_order: Dict[str, int] = {}
         for r_raw in db_receipts_raw:
             try:
                 r_json = json.loads(r_raw.get("raw_json", "{}"))
-                receipts.append(ParsedReceipt(**r_json))
+                rec = ParsedReceipt(**r_json)
+                receipts.append(rec)
+                if rec.order_number:
+                    receipt_id_by_order[rec.order_number] = int(r_raw["id"])
             except Exception:
                 continue
 
@@ -335,20 +526,41 @@ def main():
 
         appraiser = AppraisalEngine()
         reconciled_records, stats = appraiser.evaluate_portfolio(matches)
-        db.bulk_save_items(reconciled_records)
 
+        # Update items in place so IDs, item_photos, proposals, user edits, and manual receipt links are preserved.
+        for raw, rec in zip(db_items, reconciled_records):
+            if raw.get("receipt_match_type") == "manual" and raw.get("receipt_verified"):
+                # Keep user's manual receipt link untouched; only backfill ACV if empty
+                if raw.get("estimated_acv_usd") is None:
+                    db.update_item(int(raw["id"]), {"estimated_acv_usd": rec["estimated_acv_usd"]}, record_user_edit=False)
+                continue
+            updates = {
+                "estimated_replacement_value_usd": rec["estimated_replacement_value_usd"],
+                "estimated_acv_usd": rec["estimated_acv_usd"],
+                "receipt_verified": rec["receipt_verified"],
+                "purchase_price_usd": rec["purchase_price_usd"],
+                "purchase_date": rec["purchase_date"],
+                "merchant": rec["merchant"],
+                "order_number": rec["order_number"],
+                "serial_number": rec["serial_number"] or raw.get("serial_number"),
+                "receipt_evidence": rec["receipt_evidence"],
+            }
+            db.update_item(int(raw["id"]), updates, record_user_edit=False)
+
+        fresh_items = db.get_all_items()
         export_dir = Path("./data/exports")
         export_dir.mkdir(parents=True, exist_ok=True)
         csv_file = export_dir / "inventory_insurance_schedule.csv"
         report_file = export_dir / "inventory_appraisal_report.md"
 
-        export_inventory_csv(reconciled_records, str(csv_file))
-        export_inventory_markdown(reconciled_records, stats, str(report_file))
+        export_inventory_csv(fresh_items, str(csv_file))
+        export_inventory_markdown(fresh_items, stats, str(report_file))
 
         print("\n" + "=" * 65)
         print("  CROSS-MODAL RECONCILIATION COMPLETE")
         print(f"  Total Cataloged Assets:       {stats.total_items}")
         print(f"  Total Replacement Value:      ${stats.total_replacement_value_usd:,.2f} USD")
+        print(f"  Estimated Depreciated ACV:    ${stats.total_acv_usd:,.2f} USD")
         print(f"  Receipt-Verified Assets:      {stats.verified_items_count} ({stats.verification_percentage:.1f}%)")
         print(f"  Verified Valuation Backed:    ${stats.verified_valuation_usd:,.2f} USD")
         print(f"  High-Value Missing Evidence:  {len(stats.missing_evidence_items)} items (>= $500)")
