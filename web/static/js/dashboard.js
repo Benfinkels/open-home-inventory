@@ -285,6 +285,18 @@ function inspectItem(itemId) {
         `;
     }
 
+    if (item.source_image) {
+        const cropBase = item.source_image.split(/[\\/]/).pop();
+        if (cropBase && cropBase.startsWith('crop_')) {
+            html += `
+                <div class="detail-row" style="flex-direction: column; align-items: flex-start; gap: 8px;">
+                    <span class="detail-label">1:1 Optical Crop</span>
+                    <img src="/crops/${encodeURIComponent(cropBase)}" alt="Optical crop" style="max-width: 100%; max-height: 260px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.12);" onerror="this.style.display='none'">
+                </div>
+            `;
+        }
+    }
+
     if (item.description) {
         html += `
             <div class="detail-row">

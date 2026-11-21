@@ -35,6 +35,7 @@ token.json
 # Local Runtime Data & Databases
 data/
 reports/
+local_photos/
 !examples/sample_inventory.json
 !examples/sample_receipt.txt
 !examples/*.jpg

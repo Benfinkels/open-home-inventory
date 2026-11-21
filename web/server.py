@@ -33,7 +33,13 @@ app = FastAPI(
 # Mount static files and templates
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+CROPS_DIR = PROJECT_ROOT / "data" / "optical_crops"
+OVERLAYS_DIR = PROJECT_ROOT / "data" / "overlays"
+CROPS_DIR.mkdir(parents=True, exist_ok=True)
+OVERLAYS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/crops", StaticFiles(directory=str(CROPS_DIR)), name="crops")
+app.mount("/overlays", StaticFiles(directory=str(OVERLAYS_DIR)), name="overlays")
 templates = Jinja2Templates(directory=str(TEMPLATES_DIR))
 
 

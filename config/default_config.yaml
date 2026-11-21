@@ -17,6 +17,7 @@ reconciliation:
   serial_number_exact_match: true
 storage:
   crops_dir: ./data/optical_crops
+  overlays_dir: ./data/overlays
   csv_output: ./data/master_inventory.csv
   db_path: ./data/inventory.db
   json_output: ./data/master_inventory.json
@@ -24,11 +25,13 @@ storage:
 vision:
   backend: ollama
   endpoint: http://localhost:11434
-  model: minicpm-v:latest
+  model: gemma4:e2b-it-q4_K_M
+  keep_alive: "15m"
+  max_detect_dim: 1280
   optical_crop:
     enabled: true
     min_confidence: 0.7
     padding_px: 50
     zoom_factor: 2.0
   temperature: 0.1
-  timeout_seconds: 60
+  timeout_seconds: 90

@@ -89,5 +89,18 @@ The following high-value assets have been reconciled against merchant order conf
         val = it.get("estimated_replacement_value_usd") or 0.0
         md += f"| **{name}** | {cat} | {brand} | {cond} | ${val:,.2f} | {status_badge} |\n"
 
+    if getattr(stats, "missing_evidence_items", None):
+        md += """
+---
+
+## 5. High-Value Action List (Missing Receipt or Serial Number)
+
+| Item Name | Room | Replacement Value | Missing Evidence |
+| :--- | :--- | :---: | :--- |
+"""
+        for gap in stats.missing_evidence_items:
+            missing_str = ", ".join(gap["missing"])
+            md += f"| **{gap['item_name']}** | {gap['room']} | ${gap['estimated_replacement_value_usd']:,.2f} | `{missing_str}` |\n"
+
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(md)

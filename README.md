@@ -7,7 +7,7 @@ A local-first tool that scans room photos, slices lossless optical crops to read
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-brightgreen.svg)
 ![Local First](https://img.shields.io/badge/architecture-local--first%20%26%20offline-success.svg)
-![Tests](https://img.shields.io/badge/tests-11%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-26%20passing-brightgreen.svg)
 
 [Why I Built This](#why-i-built-this) • [How It Works](#how-it-works) • [Quickstart](#quickstart) • [The Optical Crop Problem](#the-optical-crop-problem) • [Receipt Parsers](#receipt-parsers) • [Dashboard](#local-dashboard) • [Extending](#adding-new-receipt-parsers)
 
@@ -137,9 +137,20 @@ When you send a 24-megapixel photo of your desk or workshop to a standard vision
 At that resolution, you can tell there is a GPU or a monitor on the desk, but **the serial number sticker and regulatory model text become a blurry, unreadable smudge.**
 
 Here is how this pipeline fixes that:
-1. **Pass 1 (Overview):** The vision model scans the whole photo once to detect items and return normalized coordinates `[ymin, xmin, ymax, xmax]`.
-2. **Pass 2 (Lossless Extraction):** [`OpticalCropEngine`](src/vision/optical_crop.py) re-opens the original high-res image and cuts out the exact bounding box with custom padding at full native resolution.
-3. **Pass 3 (Badge Inspection):** A secondary OCR pass inspects only that cropped patch, where the letters, numbers, and barcodes are still pin-sharp.
+1. **Pass 1 (EXIF-Transposed Scene Detection):** Applies `ImageOps.exif_transpose()` so portrait phone photos orient correctly, sends a downscaled `<=1280px` copy to the vision model (`gemma4:e2b-it-q4_K_M` via Ollama with `keep_alive="15m"` and `think=False`, or OpenAI-compatible / Gemini endpoints), and returns normalized bounding boxes `[ymin, xmin, ymax, xmax]`.
+2. **Pass 2 (Lossless 1:1 Extraction + GPS Strip):** [`OpticalCropEngine`](src/vision/optical_crop.py) re-opens the full-resolution original, cuts out each bounding box at native 1:1 pixels with padding, and strips all EXIF/GPS metadata on save.
+3. **Pass 3 (Badge OCR & Deduplication):** [`BadgeReader`](src/vision/badge_reader.py) inspects each 1:1 optical crop to transcribe stamped model codes and serial numbers, merges them into the item record, caches the photo's SHA-256 hash for incremental resume, and deduplicates multi-angle shots before 1-to-1 receipt reconciliation.
+
+### Empirical Real-Photo Benchmark (12.5 MP Smartphone Photos, `$0` Local 8GB GPU)
+
+![Stage-1 Naive vs Stage-2 1:1 Optical Crop OCR Benchmark](docs/charts/two_stage_vision_eval.png)
+
+- **Zero failures across 54 consecutive local vision calls** (`10/10` 12.5 MP photos + `44/44` 1:1 optical crops on an 8 GB RTX 2080 running `gemma4:e2b-it-q4_K_M` at `$0.00`).
+- **Stage 1 (downscaled full-frame) alone** identified `0%` of model numbers, `0%` of badge/serial text, and only `5%` (`2/44`) of brands.
+- **Adding Stage 2 (1:1 native optical crop + `BadgeReader` OCR, `1.55s` median/crop)** increased brand identification **3.5×** (`5% → 16%`), extracted legible badge/label text on **52% of all detected assets** (`23/44`), and verified **100% EXIF/GPS stripping** (`44/44` crops).
+- *Honest limit:* Distant serial-number stickers in wide room shots still need either a close-up label photo or a larger vision model for high-value items—which is why `reconcile` now flags high-value assets (`>= $500`) missing a receipt or serial number.
+
+*Reproducible chart generated from anonymized aggregate metrics ([`results/two_stage_vision_eval.json`](results/two_stage_vision_eval.json)) via `python scripts/generate_eval_chart.py`. No personal photos, GPS tags, or real serial numbers are committed.*
 
 ---
 
@@ -209,9 +220,10 @@ It features:
 
 Everything in this repo is designed to run entirely on your own machine. Your receipts, order histories, equipment serials, and home photos never get uploaded to third-party cloud servers or shared with anyone.
 
-- **Offline / Local Models:** Can run completely offline or against local model endpoints (e.g., Ollama running `minicpm-v` or `qwen2.5-vl`).
-- **Clean Test Fixtures:** The included demo fixtures (`examples/`) use synthetic test data (mock Cambridge, MA addresses, synthetic order numbers, and dummy serials) so you can test and develop without exposing personal info.
-- **Safe Git Configuration:** `.gitignore` is set up out of the box to prevent local databases (`*.db`), images, crops, and `.env` files from ever being committed to git.
+- **Offline / Local Models:** Can run completely offline or against local model endpoints (e.g., Ollama running `gemma4:e2b-it-q4_K_M` with `keep_alive="15m"` and `think=False`, or any OpenAI-compatible / Gemini endpoint). Never silently fabricates mock items when a real backend errors.
+- **EXIF/GPS Stripping & Serial Redaction:** Saved optical crops and annotated overlays automatically strip all EXIF/GPS metadata, and `redact_serial()` masks sensitive serial numbers for safe sharing.
+- **Clean Test Fixtures:** The included demo fixtures (`examples/`) use synthetic test data so you can test and develop without exposing personal info.
+- **Safe Git Configuration:** `.gitignore` blocks local databases (`*.db`), `local_photos/`, `data/`, `reports/`, and `.env` files from ever being committed to git.
 
 ---
 
@@ -220,10 +232,10 @@ Everything in this repo is designed to run entirely on your own machine. Your re
 | Command | What it does | Example |
 | :--- | :--- | :--- |
 | `demo` | Generates a complete synthetic test portfolio | `inventory-ai demo` |
-| `scan-photos` | Scans room photos and extracts items & optical crops | `inventory-ai scan-photos ./photos` |
-| `scrape-receipts` | Scrapes receipts from email or directory | `inventory-ai scrape-receipts` |
-| `reconcile` | Runs matching between photos and receipts | `inventory-ai reconcile` |
-| `serve` | Launches the local web dashboard | `inventory-ai serve --port 8000` |
+| `scan-photos` | 2-stage scan (detect → 1:1 EXIF-stripped crop → Badge OCR → SHA-256 resume & dedupe) | `inventory-ai scan-photos ./local_photos --model gemma4:e2b-it-q4_K_M --save-overlays --dedupe` |
+| `scrape-receipts` | Scrapes receipts from email or file | `inventory-ai scrape-receipts --file receipts.txt` |
+| `reconcile` | Runs quantity-aware 1-to-1 matching + high-value missing-evidence audit | `inventory-ai reconcile --dedupe` |
+| `serve` | Launches the local web dashboard (with mounted `/crops` previews) | `inventory-ai serve --port 8000` |
 
 ---
 
@@ -233,10 +245,10 @@ Everything in this repo is designed to run entirely on your own machine. Your re
 pytest tests/ -v
 ```
 
-All 11 unit tests run in under 0.25 seconds:
-- `test_vision.py`: Bounding boxes and optical crop extraction.
+All 26 unit tests run offline in under 1 second:
+- `test_vision.py` & `test_pipeline_upgrades.py`: Bounding boxes, portrait EXIF transpose + GPS stripping, Ollama `keep_alive`/`think=False` payloads, no silent mock fallback, SHA-256 resume, cross-photo dedup, 1-to-1 receipt matching, and missing-evidence auditing.
 - `test_receipt_parsers.py`: Merchant parsers across Amazon, Micro Center, and bike shops.
-- `test_matcher.py`: Fuzzy sequence matching and exact serial number linking.
+- `test_matcher.py` & `test_matcher_standalone.py`: Fuzzy sequence matching and exact serial number linking.
 - `test_storage.py`: SQLite persistence and CSV / Markdown generation.
 
 ---
