@@ -7,7 +7,7 @@ A local-first tool that scans room photos, slices lossless optical crops to read
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-brightgreen.svg)
 ![Local First](https://img.shields.io/badge/architecture-local--first%20%26%20offline-success.svg)
-![Tests](https://img.shields.io/badge/tests-26%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-27%20passing-brightgreen.svg)
 
 [Why I Built This](#why-i-built-this) • [How It Works](#how-it-works) • [Quickstart](#quickstart) • [The Optical Crop Problem](#the-optical-crop-problem) • [Receipt Parsers](#receipt-parsers) • [Dashboard](#local-dashboard) • [Extending](#adding-new-receipt-parsers)
 
@@ -141,14 +141,17 @@ Here is how this pipeline fixes that:
 2. **Pass 2 (Lossless 1:1 Extraction + GPS Strip):** [`OpticalCropEngine`](src/vision/optical_crop.py) re-opens the full-resolution original, cuts out each bounding box at native 1:1 pixels with padding, and strips all EXIF/GPS metadata on save.
 3. **Pass 3 (Badge OCR & Deduplication):** [`BadgeReader`](src/vision/badge_reader.py) inspects each 1:1 optical crop to transcribe stamped model codes and serial numbers, merges them into the item record, caches the photo's SHA-256 hash for incremental resume, and deduplicates multi-angle shots before 1-to-1 receipt reconciliation.
 
-### Empirical Real-Photo Benchmark (12.5 MP Smartphone Photos, `$0` Local 8GB GPU)
+### Empirical Real-Photo Benchmark (45 Real 12.5 MP Photos, `$0` Local 8GB GPU)
 
 ![Stage-1 Naive vs Stage-2 1:1 Optical Crop OCR Benchmark](docs/charts/two_stage_vision_eval.png)
 
-- **Zero failures across 54 consecutive local vision calls** (`10/10` 12.5 MP photos + `44/44` 1:1 optical crops on an 8 GB RTX 2080 running `gemma4:e2b-it-q4_K_M` at `$0.00`).
-- **Stage 1 (downscaled full-frame) alone** identified `0%` of model numbers, `0%` of badge/serial text, and only `5%` (`2/44`) of brands.
-- **Adding Stage 2 (1:1 native optical crop + `BadgeReader` OCR, `1.55s` median/crop)** increased brand identification **3.5×** (`5% → 16%`), extracted legible badge/label text on **52% of all detected assets** (`23/44`), and verified **100% EXIF/GPS stripping** (`44/44` crops).
-- *Honest limit:* Distant serial-number stickers in wide room shots still need either a close-up label photo or a larger vision model for high-value items—which is why `reconcile` now flags high-value assets (`>= $500`) missing a receipt or serial number.
+- **100% Stage-1 completion across all 45 real 12.5 MP smartphone photos** (`232` assets detected, `232/232` crops created, `8.10s` median Stage-1 / photo, `1.49s` median Stage-2 / crop on an 8 GB RTX 2080 running `gemma4:e2b-it-q4_K_M` at `$0.00`).
+- **Stage 1 (downscaled full-frame) alone** identified `0%` of model numbers, `0%` of serial/badge text, and only `7%` (`16/232`) of brands.
+- **Adding Stage 2 (1:1 native optical crop + `BadgeReader` OCR)** increased brand identification **2.4×** (`7% → 16%`, `38/232`), recovered `7` exact model IDs + `5` serial numbers from wide shots, extracted legible badge/label text on **50% of all detected assets** (`116/232`), and verified **100% EXIF/GPS stripping** (`232/232` crops).
+- **Real failure modes caught & fixed during the 45-photo stress test:**
+  1. Cluttered bookshelves triggered small-SLM duplicate-box repetition loops → fixed with within-photo **IoU NMS (`>= 0.85`)** + `repeat_penalty=1.1`.
+  2. `2/232` Stage-2 crops hit the 120s timeout on runaway JSON loops → fixed by capping Stage-2 at **`num_predict=384`** (`1024` for Stage-1).
+  3. Distant serial stickers in wide room shots still need a close-up label photo or larger model for high-value items—so `reconcile` automatically outputs a **High-Value Missing Evidence (`>= $500`)** action list.
 
 *Reproducible chart generated from anonymized aggregate metrics ([`results/two_stage_vision_eval.json`](results/two_stage_vision_eval.json)) via `python scripts/generate_eval_chart.py`. No personal photos, GPS tags, or real serial numbers are committed.*
 
@@ -245,7 +248,7 @@ Everything in this repo is designed to run entirely on your own machine. Your re
 pytest tests/ -v
 ```
 
-All 26 unit tests run offline in under 1 second:
+All 27 unit tests run offline in under 1 second:
 - `test_vision.py` & `test_pipeline_upgrades.py`: Bounding boxes, portrait EXIF transpose + GPS stripping, Ollama `keep_alive`/`think=False` payloads, no silent mock fallback, SHA-256 resume, cross-photo dedup, 1-to-1 receipt matching, and missing-evidence auditing.
 - `test_receipt_parsers.py`: Merchant parsers across Amazon, Micro Center, and bike shops.
 - `test_matcher.py` & `test_matcher_standalone.py`: Fuzzy sequence matching and exact serial number linking.

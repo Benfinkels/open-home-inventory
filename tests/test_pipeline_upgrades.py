@@ -65,6 +65,36 @@ def test_ollama_payload_enforces_keep_alive_think_false_and_json_format(tmp_path
     assert sent_payload["keep_alive"] == "15m"
     assert sent_payload["think"] is False
     assert sent_payload["format"] == "json"
+    assert sent_payload["options"]["num_predict"] == 1024
+    assert sent_payload["options"]["repeat_penalty"] >= 1.05
+
+
+def test_iou_nms_drops_bookshelf_repetition_loop_boxes(tmp_path):
+    img_p = tmp_path / "shelf.jpg"
+    Image.new("RGB", (800, 600), color=(30, 30, 30)).save(img_p)
+
+    # Simulate a small SLM repeating the same bounding box 8 times on a bookshelf
+    repeated = [
+        {
+            "item_name": f"Book Copy {i}",
+            "category": "Books",
+            "brand": "Unknown",
+            "box_2d": [200, 300, 500, 400],
+        }
+        for i in range(8)
+    ] + [
+        {
+            "item_name": "Desk Lamp",
+            "category": "Furniture",
+            "brand": "Unknown",
+            "box_2d": [100, 700, 450, 900],
+        }
+    ]
+    det = VisionDetector(backend="mock")
+    parsed = det._parse_json_response(json.dumps({"items": repeated}), str(img_p), room="Office")
+    assert len(parsed) == 2
+    assert parsed[0].item_name == "Book Copy 0"
+    assert parsed[1].item_name == "Desk Lamp"
 
 
 def test_optical_crop_exif_transpose_and_strips_exif(tmp_path):
@@ -198,7 +228,7 @@ def test_benchmark_artifact_integrity_and_privacy_hygiene():
     assert not re.search(r"\b(?:192\.168|10\.\d{1,3})\.\d{1,3}\.\d{1,3}\b", raw)
 
     data = json.loads(raw)
-    assert data["photos_tested"] == 10
-    assert data["error_count"] == 0
+    assert data["photos_tested"] == 45
+    assert data["s1_success_photos"] == 45
     assert data["exif_stripped_crops"] == data["crops_created"] > 0
-    assert data["stage2_optical_crop_ocr"]["items_enriched_by_stage2"] > 0
+    assert data["stage2_optical_crop_ocr"]["items_enriched_by_stage2"] >= 100

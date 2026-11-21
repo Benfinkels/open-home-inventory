@@ -1,26 +1,29 @@
 {
   "model": "gemma4:e2b-it-q4_K_M",
   "gpu": "NVIDIA RTX 2080 8GB (100% GPU)",
-  "photos_tested": 10,
-  "s1_success_photos": 10,
-  "s1_median_sec": 9.65,
-  "s1_warm_mean_sec": 9.31,
-  "s2_median_sec": 1.55,
-  "total_items_detected": 44,
-  "crops_created": 44,
-  "exif_stripped_crops": 44,
+  "photos_tested": 45,
+  "s1_success_photos": 45,
+  "total_wall_sec": 1096.2,
+  "s1_median_sec": 8.1,
+  "s1_warm_mean_sec": 10.53,
+  "s2_median_sec": 1.49,
+  "total_items_detected": 232,
+  "duplicates_merged": 2,
+  "unique_items_cataloged": 230,
+  "crops_created": 232,
+  "exif_stripped_crops": 232,
   "stage1_naive": {
-    "brand_identified": 2,
+    "brand_identified": 16,
     "model_identified": 0,
     "serial_extracted": 0
   },
   "stage2_optical_crop_ocr": {
-    "brand_identified": 7,
-    "model_identified": 2,
-    "serial_extracted": 1,
-    "legible_badge_text_items": 23,
-    "items_enriched_by_stage2": 23
+    "brand_identified": 38,
+    "model_identified": 7,
+    "serial_extracted": 5,
+    "legible_badge_text_items": 116,
+    "items_enriched_by_stage2": 116
   },
-  "error_count": 0,
-  "errors_sample": []
+  "error_count": 2,
+  "errors_note": "2/232 Stage-2 crops hit 120s read timeout prior to adding num_predict=384 + repeat_penalty=1.1 cap."
 }

@@ -61,6 +61,7 @@ class BadgeReader:
             mime_type=mime_type,
             temperature=0.0,
             expect_json=True,
+            max_tokens=384,
         )
         return self._parse_badge_json(raw_text)
 

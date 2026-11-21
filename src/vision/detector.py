@@ -136,6 +136,7 @@ class VisionDetector:
         mime_type: str = "image/jpeg",
         temperature: Optional[float] = None,
         expect_json: bool = True,
+        max_tokens: int = 1024,
     ) -> str:
         """Unified vision completion call across ollama, openai-compat/vllm, and gemini."""
         temp = self.temperature if temperature is None else temperature
@@ -149,7 +150,11 @@ class VisionDetector:
                 "stream": False,
                 "keep_alive": self.keep_alive,
                 "think": False,
-                "options": {"temperature": temp},
+                "options": {
+                    "temperature": temp,
+                    "num_predict": max_tokens,
+                    "repeat_penalty": 1.1,
+                },
             }
             if expect_json:
                 payload["format"] = "json"
@@ -173,6 +178,7 @@ class VisionDetector:
                     }
                 ],
                 "temperature": temp,
+                "max_tokens": max_tokens,
             }
             if expect_json:
                 payload["response_format"] = {"type": "json_object"}
@@ -186,7 +192,7 @@ class VisionDetector:
                 raise ValueError("GEMINI_API_KEY is required when backend='gemini'.")
             base = self.endpoint if "generativelanguage.googleapis.com" in self.endpoint else "https://generativelanguage.googleapis.com"
             url = f"{base}/v1beta/models/{self.model}:generateContent?key={api_key}"
-            gen_cfg: Dict[str, Any] = {"temperature": temp}
+            gen_cfg: Dict[str, Any] = {"temperature": temp, "maxOutputTokens": max_tokens}
             if expect_json:
                 gen_cfg["responseMimeType"] = "application/json"
             payload = {
@@ -290,7 +296,42 @@ class VisionDetector:
                     original_image=image_path,
                 )
             )
-        return detected
+        return self._suppress_duplicate_boxes(detected)
+
+    @staticmethod
+    def _box_iou(a: BoundingBox, b: BoundingBox) -> float:
+        inter_x0 = max(a.xmin, b.xmin)
+        inter_y0 = max(a.ymin, b.ymin)
+        inter_x1 = min(a.xmax, b.xmax)
+        inter_y1 = min(a.ymax, b.ymax)
+        inter = max(0, inter_x1 - inter_x0) * max(0, inter_y1 - inter_y0)
+        if inter == 0:
+            return 0.0
+        area_a = max(1, (a.xmax - a.xmin) * (a.ymax - a.ymin))
+        area_b = max(1, (b.xmax - b.xmin) * (b.ymax - b.ymin))
+        return inter / float(area_a + area_b - inter)
+
+    @classmethod
+    def _suppress_duplicate_boxes(
+        cls,
+        items: List[DetectedItem],
+        iou_threshold: float = 0.85,
+        max_items_per_image: int = 15,
+    ) -> List[DetectedItem]:
+        """Drop repetition-loop duplicate boxes (common on bookshelves with small SLMs)."""
+        kept: List[DetectedItem] = []
+        for it in items:
+            is_dup = False
+            if it.box is not None:
+                for prev in kept:
+                    if prev.box is not None and cls._box_iou(it.box, prev.box) >= iou_threshold:
+                        is_dup = True
+                        break
+            if not is_dup:
+                kept.append(it)
+            if len(kept) >= max_items_per_image:
+                break
+        return kept
 
     def _mock_detect(self, image_path: str) -> List[DetectedItem]:
         """Provides realistic synthetic detections strictly when backend='mock'."""
