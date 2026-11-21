@@ -1,5 +1,5 @@
 MICRO CENTER E-RECEIPT & PROOF OF PURCHASE
-Store: #055 Cambridge Micro Center
+Store: #055 Metro Micro Center
 Order Number: MC-892410-ORD
 Purchase Date: 2023-11-15
 Register: 04  Cashier: Synthetic-Clerk

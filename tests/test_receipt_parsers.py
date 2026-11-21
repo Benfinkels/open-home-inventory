@@ -41,7 +41,7 @@ def test_microcenter_parser():
     sender = "e-receipt@microcenter.com"
     subject = "Micro Center eReceipt"
     body = """
-    Store: #055 Cambridge Micro Center
+    Store: #055 Metro Micro Center
     Order Number: MC-892410-ORD
     Purchase Date: 2023-11-15
 
@@ -90,7 +90,7 @@ def test_bike_shop_parser():
 
 def test_parse_receipt_text_convenience():
     raw_text = """
-    Store: #055 Cambridge Micro Center
+    Store: #055 Metro Micro Center
     Order Number: MC-990011
     Purchase Date: 2024-02-01
     1. Intel Core i9-14900K Processor

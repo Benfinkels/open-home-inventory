@@ -120,12 +120,12 @@ class ReceiptScraper:
                 message_id="MOCK-NV-001",
                 date="2023-12-18",
                 sender="NVIDIA Store <donotreply@nvidia.com>",
-                subject="NVIDIA - Shipping Confirmation (Order #1148118264539)",
+                subject="NVIDIA - Shipping Confirmation (Order #9000000000001)",
                 body=(
-                    "Order Number: 1148118264539\n"
+                    "Order Number: 9000000000001\n"
                     "Order Date: December 18, 2023\n"
                     "NVIDIA GEFORCE RTX 4090 Physical Shipment Model Number:900-1G136-2530-000 $1,599.00 Qty: 1\n"
-                    "Tracking Number: 722762985829\n"
+                    "Tracking Number: 900000000001\n"
                     "Subtotal : $1,599.00  Tax : $99.94  Total : $1,698.94"
                 )
             ),
@@ -133,14 +133,14 @@ class ReceiptScraper:
                 message_id="MOCK-MC-002",
                 date="2023-12-28",
                 sender="Micro Center <NoReply@microcenter.com>",
-                subject="Your receipt from Micro Center: Cambridge",
+                subject="Your receipt from Micro Center: Metro",
                 body=(
-                    "Reference Number >> 121-WP-12808881\n"
+                    "Reference Number >> 121-SYN-00000001\n"
                     "Transaction Date >> 12/28/2023\n"
-                    "643718 AMD AMD RYZEN 7 7800X3D WOF S/N: 9KW2751S30089 1 349.99 349.99\n"
-                    "504936 ASUS ROG STRIX B650E-F GAM WF S/N: R3M0KC322403CWW 1 289.99 289.99\n"
-                    "390054 DELL 34\"OLED AW3423DW MONI/G S/N: G8HQ2K3 1 899.99 899.99\n"
-                    "600387 FOCUSRITE SCARLETT SOLO 4TH GEN S/N: S1KX5TJ39925C8 1 139.99 139.99\n"
+                    "643718 AMD AMD RYZEN 7 7800X3D WOF S/N: SYN-CPU-0001 1 349.99 349.99\n"
+                    "504936 ASUS ROG STRIX B650E-F GAM WF S/N: SYN-MB-0002 1 289.99 289.99\n"
+                    "390054 DELL 34\"OLED AW3423DW MONI/G S/N: SYN-MON-0003 1 899.99 899.99\n"
+                    "600387 FOCUSRITE SCARLETT SOLO 4TH GEN S/N: SYN-AUD-0004 1 139.99 139.99\n"
                     "Sale TOTAL >> $3,135.29"
                 )
             ),
@@ -148,9 +148,9 @@ class ReceiptScraper:
                 message_id="MOCK-BBY-003",
                 date="2024-07-03",
                 sender="Best Buy Notifications <BestBuyInfo@emailinfo.bestbuy.com>",
-                subject="Your order BBY01-806947300479 has been picked up",
+                subject="Your order BBY01-000000000001 has been picked up",
                 body=(
-                    "Order number: BBY01-806947300479\n"
+                    "Order number: BBY01-000000000001\n"
                     "Product Details ASUS - ROG Zephyrus G16 16\" OLED 240Hz Gaming Laptop - "
                     "Intel Core Ultra 9 - 16GB LPDDR5X - NVIDIA GeForce RTX 4070 - 1TB SSD - Eclipse Gray $1,999.99\n"
                     "SKU: 6570222 Qty: 1\n"
@@ -160,11 +160,11 @@ class ReceiptScraper:
             ScrapedMessage(
                 message_id="MOCK-BIKE-004",
                 date="2025-06-15",
-                sender="Belmont Wheelworks <noreply@lightspeedhq.com>",
-                subject="Belmont Wheelworks Receipt For Order #110301",
+                sender="Sample Cycling Shop <noreply@lightspeedhq.com>",
+                subject="Sample Cycling Shop Receipt For Order #900001",
                 body=(
-                    "Work Order #110301\n"
-                    "Work Order Item: Specialized Click and Collect Bike Order / GREEN / S3 / WSBC014373007V\n"
+                    "Work Order #900001\n"
+                    "Work Order Item: Specialized Click and Collect Bike Order / GREEN / S3 / SYN-BIKE-000001\n"
                     "Status: Finished\n"
                     "Notes: BIKE PURCHASED 6/15/25 REAR BRAKE NEEDS BLEED. DO AS WARRANTY\n"
                     "Total $0.00"
@@ -174,9 +174,9 @@ class ReceiptScraper:
                 message_id="MOCK-ZWIFT-005",
                 date="2022-11-25",
                 sender="Zwift <orders@zwift.com>",
-                subject="Order #ZWUS56969 confirmed",
+                subject="Order #ZWUS00001 confirmed",
                 body=(
-                    "Order #: ZWUS56969\n"
+                    "Order #: ZWUS00001\n"
                     "Zwift Hub Qty: 1 11-Speed $499.00\n"
                     "Subtotal $499.00 Shipping $25.00 Taxes $31.19 Total $555.19 USD"
                 )

@@ -152,7 +152,7 @@ class BadgeReader:
             return {
                 "brand": "Alienware",
                 "model": "AW3423DW",
-                "serial_number": "MOCK-G8HQ2K3",
+                "serial_number": "MOCK-MON-0042",
                 "legible_text": ["ALIENWARE", "QD-OLED", "AW3423DW"],
                 "confidence": 0.98,
             }

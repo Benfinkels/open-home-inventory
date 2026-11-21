@@ -213,7 +213,7 @@ def test_appraisal_missing_evidence_and_serial_redaction():
     assert len(stats.missing_evidence_items) == 1
     assert set(stats.missing_evidence_items[0]["missing"]) == {"receipt", "serial_number"}
 
-    assert redact_serial("WSBC014373007V") == "WSB-REDACTED-07V"
+    assert redact_serial("SYN0123456789V") == "SYN-REDACTED-89V"
     assert redact_serial("12345") == "REDACTED"
 
 
@@ -232,3 +232,47 @@ def test_benchmark_artifact_integrity_and_privacy_hygiene():
     assert data["s1_success_photos"] == 45
     assert data["exif_stripped_crops"] == data["crops_created"] > 0
     assert data["stage2_optical_crop_ocr"]["items_enriched_by_stage2"] >= 100
+
+
+def test_mock_receipts_parse_cleanly_after_sanitization():
+    from src.receipts.scraper import ReceiptScraper
+    from src.receipts.parser_registry import ReceiptParserRegistry
+
+    msgs = ReceiptScraper(provider="mock").fetch_receipts()
+    registry = ReceiptParserRegistry()
+    parsed = [registry.parse_email(m.message_id, m.date, m.sender, m.subject, m.body) for m in msgs]
+    assert len(msgs) == 5
+    assert all(p is not None and p.notes != "Parsed via GenericFallbackParser" for p in parsed)
+
+
+def test_repo_tracked_files_privacy_hygiene():
+    from pathlib import Path
+    import re
+    import subprocess
+
+    repo_root = Path(__file__).resolve().parent.parent
+    tracked = subprocess.check_output(
+        ["git", "-C", str(repo_root), "ls-files"], text=True
+    ).splitlines()
+    text_exts = {".py", ".md", ".txt", ".json", ".yaml", ".yml", ".toml", ".sh", ".ps1"}
+    forbidden = [
+        ("private_ip", re.compile(r"\b(?:192\.168|10\.\d{1,3}|100\.(?:6[4-9]|[7-9]\d|1[01]\d|12[0-7]))\.\d{1,3}\.\d{1,3}\b")),
+        ("tailscale_host", re.compile(r"\.ts\.net\b", re.IGNORECASE)),
+        ("personal_email", re.compile(r"[A-Za-z0-9._%+-]+@(?:gmail|yahoo|icloud|outlook)\.com\b", re.IGNORECASE)),
+    ]
+    forbidden_names = re.compile(r"(?:^|/)(?:\.env(?:\..+)?|developer_key.*|.*\.(?:db|sqlite3?))$", re.IGNORECASE)
+    violations = []
+    for rel in tracked:
+        norm = rel.replace("\\", "/")
+        if forbidden_names.search(norm) and not norm.endswith(".env.example"):
+            violations.append(f"{rel}: forbidden_tracked_file")
+        p = repo_root / rel
+        if p.suffix.lower() not in text_exts or not p.is_file():
+            continue
+        if norm == "tests/test_pipeline_upgrades.py":
+            continue
+        text = p.read_text(encoding="utf-8", errors="ignore")
+        for label, rx in forbidden:
+            if rx.search(text):
+                violations.append(f"{rel}: {label}")
+    assert not violations, f"Privacy hygiene violations: {violations}"

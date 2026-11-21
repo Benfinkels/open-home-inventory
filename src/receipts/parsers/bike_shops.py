@@ -35,7 +35,7 @@ class BikeShopReceiptParser(BaseReceiptParser):
                 price = float(pr_m.group(1).replace(",", "")) if pr_m else 0.0
                 items.append(ParsedItem(name=item_name, price_usd=price, serial_number=sn))
 
-            # Extract Work Order Item: Bianchi 21 Impulso ... / celeste / wbk7027375
+            # Extract Work Order Item: Bianchi 21 Impulso ... / celeste / SYN-FRAME-0001
             wo_item = re.search(r"Work Order Item:\s*([^\n\r]+)", body)
             if wo_item:
                 raw_item = wo_item.group(1).strip()
