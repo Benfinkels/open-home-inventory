@@ -397,7 +397,7 @@
   }
 
   function renderDiffRow(label, oldVal, newVal) {
-    if (!newVal) return "";
+    if (!newVal || String(oldVal || "").trim() === String(newVal).trim()) return "";
     return `<div class="diff-row">
       <span class="diff-key">${esc(label)}</span>
       <span class="diff-val"><span class="diff-old">${esc(oldVal || "—")}</span><span class="diff-new">${esc(newVal)}</span></span>

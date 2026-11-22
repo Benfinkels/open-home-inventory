@@ -82,6 +82,10 @@ class BadgeReader:
         def _norm_opt(val: Any) -> Optional[str]:
             if val is None:
                 return None
+            if isinstance(val, list):
+                val = next((x for x in val if x not in (None, "")), None)
+                if val is None:
+                    return None
             s = str(val).strip()
             return None if s.lower() in ("", "null", "none", "n/a", "unknown") else s
 

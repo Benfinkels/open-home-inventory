@@ -446,7 +446,7 @@ def send_webhook_notification(
 
 def send_openclaw_notification(digest_text: str, cmd: Optional[str] = None, timeout: int = 30) -> bool:
     """Hand off the escalation digest to OpenClaw (e.g. Alfred on Sheldon) via stdin."""
-    raw_cmd = cmd or os.getenv("OPENCLAW_NOTIFY_CMD", "openclaw agent --message-file -")
+    raw_cmd = cmd or os.getenv("OPENCLAW_NOTIFY_CMD", "openclaw agent --message-file /dev/stdin")
     argv = shlex.split(raw_cmd)
     res = subprocess.run(argv, input=digest_text, text=True, capture_output=True, timeout=timeout)
     if res.returncode != 0:
