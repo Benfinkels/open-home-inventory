@@ -868,3 +868,168 @@ class InventoryDatabase:
                 """
             ).fetchall()
             return [dict(r) for r in rows]
+
+    def import_legacy_json(
+        self,
+        records: List[Dict[str, Any]],
+        crops_dir: Optional[str] = None,
+        overlays_dir: Optional[str] = None,
+        replace_existing: bool = False,
+    ) -> Dict[str, int]:
+        """Import a curated legacy JSON inventory array into v3 SQLite (items + receipts + item_photos)."""
+        from ..reconciliation.appraisal import estimate_acv
+
+        if replace_existing:
+            with self._get_connection() as conn:
+                conn.execute("DELETE FROM escalation_proposals")
+                conn.execute("DELETE FROM item_photos")
+                conn.execute("DELETE FROM items")
+                conn.execute("DELETE FROM receipts")
+                conn.commit()
+
+        crop_files = sorted(os.listdir(crops_dir)) if crops_dir and os.path.isdir(crops_dir) else []
+        overlay_files = sorted(os.listdir(overlays_dir)) if overlays_dir and os.path.isdir(overlays_dir) else []
+
+        def _infer_room(rec: Dict[str, Any]) -> str:
+            if rec.get("room"):
+                return str(rec["room"])
+            blob = f"{rec.get('category', '')} {rec.get('item_name', '')}".lower()
+            if any(k in blob for k in ("bicycle", "bike", "mower", "shredder", "tool", "garage", "outdoor", "zwift")):
+                return "Garage"
+            if any(k in blob for k in ("kitchen", "espresso", "gaggia", "oven", "appliance", "food processor", "coffee")):
+                return "Kitchen"
+            if any(k in blob for k in ("computer", "workstation", "laptop", "monitor", "camera", "nikon", "audio", "keyboard", "mouse", "tablet", "phone", "elgato", "focusrite", "nixie")):
+                return "Office"
+            if any(k in blob for k in ("closet", "clothes", "footwear", "boot", "shoe", "luggage", "suitcase", "jacket", "backpack")):
+                return "Bedroom"
+            return "Living Room"
+
+        def _find_media(rec: Dict[str, Any]) -> tuple[str, str]:
+            src = rec.get("source_image") or ""
+            ov = rec.get("overlay_image") or ""
+            if src and os.path.exists(src):
+                return src, ov
+            fn = os.path.splitext(os.path.basename(str(rec.get("filename") or "")))[0].lower()
+            tokens = [t for t in re.split(r"[^a-z0-9]+", f"{rec.get('brand', '')} {rec.get('item_name', '')}".lower()) if len(t) >= 4]
+            if fn and crops_dir:
+                cands = [f for f in crop_files if fn in f.lower()]
+                if cands:
+                    cands.sort(key=lambda f: sum(1 for t in tokens if t in f.lower()), reverse=True)
+                    src = os.path.join(crops_dir, cands[0])
+            if not src and crops_dir and tokens:
+                scored = [(sum(1 for t in tokens if t in f.lower()), f) for f in crop_files]
+                best_score, best_f = max(scored, default=(0, ""))
+                if best_score >= 2:
+                    src = os.path.join(crops_dir, best_f)
+            if not ov and fn and overlays_dir:
+                ov_match = next((f for f in overlay_files if fn in f.lower()), "")
+                if ov_match:
+                    ov = os.path.join(overlays_dir, ov_match)
+            return src, ov
+
+        imported_items = 0
+        imported_receipts = 0
+        skipped_dups = 0
+        seen_receipts: Dict[tuple[str, str], int] = {}
+
+        def _to_text(val: Any, default: str = "") -> str:
+            if val is None:
+                return default
+            if isinstance(val, dict):
+                return ", ".join(f"{k}: {v}" for k, v in val.items() if v not in (None, "")) or default
+            if isinstance(val, list):
+                return ", ".join(str(x) for x in val if x not in (None, "")) or default
+            return str(val).strip()
+
+        def _to_opt_float(val: Any) -> Optional[float]:
+            if val in (None, ""):
+                return None
+            try:
+                return float(str(val).replace("$", "").replace(",", ""))
+            except (TypeError, ValueError):
+                return None
+
+        for raw in records:
+            name = _to_text(raw.get("item_name"))
+            if not name or "[duplicate view]" in name.lower():
+                skipped_dups += 1
+                continue
+
+            val = _to_opt_float(raw.get("estimated_replacement_value_usd")) or 0.0
+            is_ver = bool(raw.get("receipt_verified"))
+            rec_id: Optional[int] = None
+            serial_txt = _to_text(raw.get("serial_number"))
+            model_txt = _to_text(raw.get("model_or_identifiers") or raw.get("model"))
+            brand_txt = _to_text(raw.get("brand"), default="Unknown") or "Unknown"
+            p_price = _to_opt_float(raw.get("purchase_price_usd"))
+            p_date = _to_text(raw.get("purchase_date"))
+            merch_txt = _to_text(raw.get("merchant"))
+            ord_txt = _to_text(raw.get("order_number"))
+            ev_txt = _to_text(raw.get("receipt_evidence"))
+
+            if is_ver:
+                merch = merch_txt or "Verified Merchant"
+                ord_num = ord_txt or f"IMPORT-{imported_items + 1:04d}"
+                rkey = (merch.lower(), ord_num.lower())
+                if rkey not in seen_receipts:
+                    price = p_price if p_price is not None else val
+                    rec_id = self.save_receipt(
+                        {
+                            "merchant": merch,
+                            "order_number": ord_num,
+                            "purchase_date": p_date[:10] or "2024-01-01",
+                            "total_usd": price,
+                            "source_message_id": f"import-{ord_num[:20]}",
+                            "notes": ev_txt or _to_text(raw.get("verification_notes")),
+                            "items": [
+                                {
+                                    "name": name,
+                                    "price_usd": price,
+                                    "quantity": 1,
+                                    "serial_number": serial_txt or None,
+                                }
+                            ],
+                        }
+                    )
+                    seen_receipts[rkey] = rec_id
+                    imported_receipts += 1
+                else:
+                    rec_id = seen_receipts[rkey]
+
+            src_img, ov_img = _find_media(raw)
+            acv = _to_opt_float(raw.get("estimated_acv_usd"))
+            if acv is None:
+                acv = estimate_acv(val, _to_text(raw.get("category")), p_date or None, _to_text(raw.get("condition")))
+
+            self.save_item(
+                {
+                    "item_name": name,
+                    "category": _to_text(raw.get("category"), default="General") or "General",
+                    "brand": brand_txt,
+                    "model_or_identifiers": model_txt,
+                    "room": _infer_room(raw),
+                    "sub_location": _to_text(raw.get("sub_location")),
+                    "condition": _to_text(raw.get("condition"), default="Good") or "Good",
+                    "quantity": int(raw.get("quantity") or 1),
+                    "estimated_replacement_value_usd": round(val, 2),
+                    "estimated_acv_usd": round(float(acv), 2),
+                    "receipt_verified": is_ver,
+                    "receipt_match_type": "manual" if is_ver else "auto",
+                    "receipt_id": rec_id,
+                    "purchase_price_usd": p_price,
+                    "purchase_date": p_date or None,
+                    "merchant": merch_txt or None,
+                    "order_number": ord_txt or None,
+                    "serial_number": serial_txt,
+                    "receipt_evidence": ev_txt or None,
+                    "source_image": src_img,
+                    "original_image": _to_text(raw.get("filename")),
+                    "overlay_image": ov_img,
+                    "badge_verified": bool(serial_txt or model_txt),
+                    "review_status": "confirmed" if is_ver else "unreviewed",
+                    "description": _to_text(raw.get("description")),
+                }
+            )
+            imported_items += 1
+
+        return {"items": imported_items, "receipts": imported_receipts, "skipped_duplicates": skipped_dups}

@@ -319,3 +319,75 @@ def test_fastapi_v3_endpoints_and_claim_pack_zip(tmp_path, monkeypatch):
         assert "inventory_appraisal_report.md" in names
         assert "receipts.json" in names
         assert any(n.startswith("photos/") for n in names)
+
+
+def test_golden_prompt_clutter_filter_scalar_brand_and_legacy_json_import(tmp_path):
+    from src.vision.detector import VisionDetector
+
+    det = VisionDetector(backend="mock")
+    raw_json = json.dumps(
+        {
+            "items": [
+                {
+                    "item_name": "Dish Rack Utensil Caddy",
+                    "category": "Kitchen",
+                    "brand": "Unknown",
+                    "estimated_replacement_value_usd": 20.0,
+                },
+                {
+                    "item_name": "Espresso Machine",
+                    "category": "Kitchen",
+                    "brand": ["GAGGIA"],
+                    "model": ["Classic Pro"],
+                    "estimated_replacement_value_usd": 450.0,
+                },
+            ]
+        }
+    )
+    parsed = det._parse_json_response(raw_json, "kitchen.jpg", room="Kitchen")
+    assert len(parsed) == 1
+    assert parsed[0].brand == "GAGGIA"
+    assert parsed[0].model == "Classic Pro"
+
+    # Truncated JSON array recovery + low-value repetition-loop collapse
+    truncated = (
+        '{"items": ['
+        '{"item_name": "Coffee Beans", "category": "Kitchen", "brand": "Unknown", "estimated_replacement_value_usd": 30},'
+        '{"item_name": "Coffee Beans", "category": "Kitchen", "brand": "Unknown", "estimated_replacement_value_usd": 30},'
+        '{"item_name": "Coffee Beans", "category": "Kitchen", "brand": "Unknown", "estimated_replacement_value_usd": 30},'
+        '{"item_name": "Coffee Beans", "category": "Kitchen", "brand": "Unknown", "estimated_replacement_value_usd": 30},'
+        '{"item_name": "Truncated Tail'
+    )
+    recovered = det._parse_json_response(truncated, "kitchen.jpg", room="Kitchen")
+    assert len(recovered) == 2  # collapsed 4 repeated <=$50 items to 2, dropped truncated tail cleanly
+
+    db = InventoryDatabase(str(tmp_path / "legacy_import.db"))
+    res = db.import_legacy_json(
+        [
+            {
+                "item_name": "Nikon Z6 Camera",
+                "category": "Photography",
+                "brand": "Nikon",
+                "model_or_identifiers": {"body": "Z6", "lens": "24-70mm f/4 S"},
+                "estimated_replacement_value_usd": 2400.0,
+                "receipt_verified": True,
+                "merchant": "Sample Photo Store",
+                "order_number": "ORD-Z6-1",
+                "purchase_date": "2024-05-01",
+                "purchase_price_usd": 2399.95,
+            },
+            {
+                "item_name": "[Duplicate View] Nikon Z6 Camera",
+                "estimated_replacement_value_usd": 0.0,
+            },
+        ],
+        replace_existing=True,
+    )
+    assert res == {"items": 1, "receipts": 1, "skipped_duplicates": 1}
+    loaded = db.get_all_items()
+    assert len(loaded) == 1
+    assert loaded[0]["room"] == "Office"
+    assert "body: Z6" in loaded[0]["model_or_identifiers"]
+    assert loaded[0]["receipt_verified"] == 1
+    assert loaded[0]["receipt_match_type"] == "manual"
+

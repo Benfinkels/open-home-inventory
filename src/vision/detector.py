@@ -115,12 +115,12 @@ class VisionDetector:
             "You are an expert home insurance property appraiser and computer vision specialist. "
             "Analyze the provided photo and catalog ALL distinct valuable physical assets "
             "(electronics, bicycles, monitors, appliances, furniture, power tools, audio gear, cameras, luggage). "
-            "Ignore structural room features (walls, plain floors, empty shelves). "
+            "Ignore structural room features (walls, plain floors, empty shelves, wall outlets) and low-value clutter. "
             'Return ONLY a valid JSON object of the form {"items": [...]} where each item has keys:\n'
             "- item_name (string: precise, descriptive name)\n"
             "- category (string: e.g. Electronics, Bicycles, Audio, Tools, Kitchen, Furniture, Photography)\n"
-            "- brand (string: manufacturer name if visible, else 'Unknown')\n"
-            "- model (string or null: exact model/series if legible)\n"
+            "- brand (scalar string: manufacturer name if visible, else 'Unknown' — never an array)\n"
+            "- model (scalar string or null: exact model/series if legible)\n"
             "- condition (string: Mint, Excellent, Good, Fair)\n"
             "- estimated_replacement_value_usd (float: realistic replacement cost in USD)\n"
             "- description (string: concise visual details, visible markings, accessories)\n"
@@ -234,11 +234,27 @@ class VisionDetector:
         try:
             items_raw = json.loads(clean_text)
         except json.JSONDecodeError as e:
-            # Attempt recovery if model wrapped JSON in leading/trailing prose
+            # Attempt recovery if model wrapped JSON in prose OR hit num_predict mid-array
+            recovered = None
             m = re.search(r"(\{.*\}|\[.*\])", clean_text, flags=re.DOTALL)
-            if not m:
+            if m:
+                try:
+                    recovered = json.loads(m.group(1))
+                except json.JSONDecodeError:
+                    recovered = None
+            if recovered is None:
+                # Recover complete item objects from a truncated {"items": [{...}, {...
+                objs = []
+                for obj_m in re.finditer(r"\{[^{}]*\"item_name\"[^{}]*\}", clean_text, flags=re.DOTALL):
+                    try:
+                        objs.append(json.loads(obj_m.group(0)))
+                    except json.JSONDecodeError:
+                        continue
+                if objs:
+                    recovered = {"items": objs}
+            if recovered is None:
                 raise ValueError(f"Vision model returned invalid JSON on {image_path}: {e}. Raw: {clean_text[:200]}") from e
-            items_raw = json.loads(m.group(1))
+            items_raw = recovered
 
         if isinstance(items_raw, dict):
             if "items" in items_raw and isinstance(items_raw["items"], list):
@@ -279,13 +295,39 @@ class VisionDetector:
             except (TypeError, ValueError):
                 conf = 0.85
 
+            def _scalar_str(val: Any, default: Optional[str] = None) -> Optional[str]:
+                if isinstance(val, list):
+                    val = next((x for x in val if x not in (None, "")), None)
+                if val is None:
+                    return default
+                s = str(val).strip()
+                return default if s.lower() in ("", "null", "none", "n/a", "unknown") else s
+
+            item_name = str(d.get("item_name") or "Unidentified Item").strip()
+            clutter_terms = (
+                "dish rack",
+                "utensil caddy",
+                "coat hanger",
+                "clothes hanger",
+                "cardboard box",
+                "box/packaging",
+                "laundry basket",
+                "trash can",
+                "wall outlet",
+                "outlet/socket",
+                "glass/container",
+                "cable/wire",
+            )
+            if any(term in item_name.lower() for term in clutter_terms) and est_val < 100.0:
+                continue
+
             detected.append(
                 DetectedItem(
-                    item_name=str(d.get("item_name") or "Unidentified Item").strip(),
+                    item_name=item_name,
                     category=str(d.get("category") or "General").strip(),
-                    brand=str(d.get("brand") or "Unknown").strip(),
-                    model=str(d["model"]).strip() if d.get("model") not in (None, "", "null") else None,
-                    serial_number=str(d["serial_number"]).strip() if d.get("serial_number") not in (None, "", "null") else None,
+                    brand=_scalar_str(d.get("brand"), default="Unknown") or "Unknown",
+                    model=_scalar_str(d.get("model")),
+                    serial_number=_scalar_str(d.get("serial_number")),
                     room=room,
                     condition=str(d.get("condition") or "Good").strip(),
                     estimated_replacement_value_usd=est_val,
@@ -318,8 +360,9 @@ class VisionDetector:
         iou_threshold: float = 0.85,
         max_items_per_image: int = 15,
     ) -> List[DetectedItem]:
-        """Drop repetition-loop duplicate boxes (common on bookshelves with small SLMs)."""
+        """Drop repetition-loop duplicate boxes and repeated low-value clutter loops from small SLMs."""
         kept: List[DetectedItem] = []
+        low_val_name_counts: Dict[str, int] = {}
         for it in items:
             is_dup = False
             if it.box is not None:
@@ -327,6 +370,11 @@ class VisionDetector:
                     if prev.box is not None and cls._box_iou(it.box, prev.box) >= iou_threshold:
                         is_dup = True
                         break
+            if not is_dup and float(it.estimated_replacement_value_usd or 0.0) <= 50.0:
+                name_key = it.item_name.strip().lower()
+                low_val_name_counts[name_key] = low_val_name_counts.get(name_key, 0) + 1
+                if low_val_name_counts[name_key] > 2:
+                    is_dup = True
             if not is_dup:
                 kept.append(it)
             if len(kept) >= max_items_per_image:

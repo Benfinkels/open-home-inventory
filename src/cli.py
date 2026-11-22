@@ -264,6 +264,14 @@ def main():
     recon_p.add_argument("--db-path", type=str, default=None, help="Override SQLite database path")
     recon_p.add_argument("--dedupe", action="store_true", help="Deduplicate items before reconciliation")
 
+    # Import Legacy JSON
+    imp_p = subparsers.add_parser("import-json", help="Import a curated JSON inventory array into SQLite")
+    imp_p.add_argument("json_file", type=str, help="Path to JSON inventory file")
+    imp_p.add_argument("--replace", action="store_true", help="Replace existing DB items and receipts")
+    imp_p.add_argument("--crops-dir", type=str, default=None, help="Optical crops directory to match thumbnails")
+    imp_p.add_argument("--overlays-dir", type=str, default=None, help="Overlays directory to match context views")
+    imp_p.add_argument("--db-path", type=str, default=None, help="Override SQLite database path")
+
     # Serve
     serve_p = subparsers.add_parser("serve", help="Launch local interactive web dashboard")
     serve_p.add_argument("--port", type=int, default=8080, help="Web server port")
@@ -278,6 +286,23 @@ def main():
         from web.server import start_server
 
         start_server(host=args.host, port=args.port)
+
+    elif args.command == "import-json":
+        cfg = load_config()
+        s_cfg = cfg.get("storage", {})
+        db = InventoryDatabase(args.db_path or s_cfg.get("db_path", "./data/inventory.db"))
+        raw = json.loads(Path(args.json_file).read_text(encoding="utf-8"))
+        records = raw if isinstance(raw, list) else raw.get("items", [])
+        res = db.import_legacy_json(
+            records,
+            crops_dir=args.crops_dir or s_cfg.get("crops_dir", "./data/optical_crops"),
+            overlays_dir=args.overlays_dir or s_cfg.get("overlays_dir", "./data/overlays"),
+            replace_existing=args.replace,
+        )
+        print(
+            f"[✓] Imported {res['items']} curated items and {res['receipts']} verified receipts "
+            f"(skipped {res['skipped_duplicates']} duplicate views)."
+        )
 
     elif args.command == "scan-photos":
         cfg = load_config()
