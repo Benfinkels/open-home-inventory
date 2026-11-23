@@ -7,7 +7,7 @@ A local-first tool that scans room photos, slices lossless optical crops to read
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 ![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-brightgreen.svg)
 ![Local First](https://img.shields.io/badge/architecture-local--first%20%26%20offline-success.svg)
-![Tests](https://img.shields.io/badge/tests-36%20passing-brightgreen.svg)
+![Tests](https://img.shields.io/badge/tests-37%20passing-brightgreen.svg)
 
 [Why I Built This](#why-i-built-this) • [How It Works](#how-it-works) • [Quickstart](#quickstart) • [The Optical Crop Problem](#the-optical-crop-problem) • [Receipt Parsers](#receipt-parsers) • [Dashboard](#local-dashboard) • [Extending](#adding-new-receipt-parsers)
 
@@ -211,6 +211,12 @@ self.parsers.insert(0, MyStoreParser())
 
 The dashboard (`web/`) is built with FastAPI and zero-build Vanilla HTML/CSS/JS — completely offline with **no external font or CDN requests** — designed around a calm **Warm Archival Paper** light default with a **Graphite Vault** dark toggle.
 
+![Archival Property Ledger — Warm Archival Paper Light Theme & Escalation Drawer](docs/screenshots/ledger_light_drawer.png)
+
+![Archival Property Ledger — Graphite Vault Dark Theme](docs/screenshots/ledger_dark.png)
+
+*Screenshots rendered directly from `inventory-ai demo` synthetic fixtures — no personal photos or receipts.*
+
 It features:
 - **Unified Hairline Ledger Strip:** Live RCV, depreciated ACV, receipt-backed percentage, `>= $500` missing-evidence triage count, and pending escalation proposals count.
 - **Keyboard-First Triage Drawer (`J`/`K`/`Enter`/`Esc`):** Inline editing of brand, model, serial, room, sub-location, valuation, and notes — with `user_edited_fields` protection so automated rescans or reconciles never overwrite your edits.
@@ -251,7 +257,7 @@ Everything in this repo is designed to run entirely on your own machine. Your re
 pytest tests/ -v
 ```
 
-All 36 unit & API integration tests run offline in ~1 second:
+All 37 unit & API integration tests run offline in ~1 second:
 - `test_v3_features.py`: Schema migration + `user_edited_fields` protection, multi-angle merge, ACV estimation, HTML-email & `.eml` receipt ingestion, `$0` escalation + MiniMax text-only guard + agent handoff + Discord/OpenClaw notify, and end-to-end FastAPI CRUD + Claim Pack `.zip`.
 - `test_hygiene.py`: Privacy regression scan across all tracked source, test, config, example, and web files.
 - `test_vision.py` & `test_pipeline_upgrades.py`: Bounding boxes, portrait EXIF transpose + GPS stripping, Ollama `keep_alive`/`think=False` payloads, IoU NMS, SHA-256 resume, cross-photo dedup, 1-to-1 receipt matching, and missing-evidence auditing.

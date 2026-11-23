@@ -34,7 +34,7 @@ BASE_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BASE_DIR.parent
 TEMPLATES_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
-DB_PATH = PROJECT_ROOT / "data" / "inventory.db"
+DB_PATH = Path(os.getenv("INVENTORY_DB_PATH", str(PROJECT_ROOT / "data" / "inventory.db")))
 
 app = FastAPI(
     title="Open Home Inventory",
@@ -44,8 +44,8 @@ app = FastAPI(
 
 STATIC_DIR.mkdir(parents=True, exist_ok=True)
 TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
-CROPS_DIR = PROJECT_ROOT / "data" / "optical_crops"
-OVERLAYS_DIR = PROJECT_ROOT / "data" / "overlays"
+CROPS_DIR = Path(os.getenv("INVENTORY_CROPS_DIR", str(PROJECT_ROOT / "data" / "optical_crops")))
+OVERLAYS_DIR = Path(os.getenv("INVENTORY_OVERLAYS_DIR", str(PROJECT_ROOT / "data" / "overlays")))
 CROPS_DIR.mkdir(parents=True, exist_ok=True)
 OVERLAYS_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
